@@ -1,12 +1,13 @@
 import { AgentwatchError } from "../errors.js";
 import { displayPath, loadSandSecrets, type SandSecrets } from "./secrets.js";
 import { decodeJwtExpMs, decryptSafeStorage } from "./decrypt.js";
+import { authMode, desktopUnsupportedOnMacMessage } from "./platform.js";
 
 export type AccessToken = {
   token: string;
   backend: string;
   secretsPath: string;
-  variant: SandSecrets["variant"];
+  variant: SandSecrets["variant"] | "independent";
   /** JWT exp，毫秒；非 JWT 时为 undefined。 */
   expiresAtMs?: number;
 };
@@ -24,6 +25,12 @@ export type LoadTokenOptions = {
  * 若 JWT 看起来已过期，调用方应再读一次文件（官方应用可能已刷新磁盘上的值）。
  */
 export function loadAccessToken(opts: LoadTokenOptions = {}): AccessToken {
+  const platform = opts.platform ?? process.platform;
+  if (authMode(platform) === "independent") {
+    throw new AgentwatchError("auth", desktopUnsupportedOnMacMessage(), {
+      hint: "请运行 agentwatch login，或再次执行命令并在浏览器打开 stderr 上的登录链接。",
+    });
+  }
   const secrets = loadSandSecrets({
     path: opts.secretsFile,
     platform: opts.platform,
@@ -67,6 +74,11 @@ export function isExpired(tok: AccessToken, nowMs?: number): boolean {
 }
 
 export function expiredError(tok: AccessToken): AgentwatchError {
+  if (tok.variant === "independent") {
+    return new AgentwatchError("auth", "独立鉴权的 access token 已过期。", {
+      hint: "请重新登录（stderr 会打印登录链接）。若只需刷新，请设置 AGENTWATCH_OAUTH_CLIENT_ID。",
+    });
+  }
   return new AgentwatchError(
     "auth",
     `官方 access token 已过期（来源 ${displayPath(tok.secretsPath)}）。`,

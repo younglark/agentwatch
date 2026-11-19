@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AgentwatchError } from "../errors.js";
+import { authMode, desktopUnsupportedOnMacMessage } from "./platform.js";
 import {
   LINUX_BASIC_PASSWORD,
   LINUX_PBKDF2_ITERATIONS,
@@ -27,6 +28,11 @@ export type DecryptResult = {
  */
 export function decryptSafeStorage(cipher: string, opts?: { platform?: NodeJS.Platform }): DecryptResult {
   const platform = opts?.platform ?? process.platform;
+  if (authMode(platform) === "independent") {
+    throw new AgentwatchError("auth", desktopUnsupportedOnMacMessage(), {
+      hint: "macOS 不会访问钥匙串中的 Grok Bot Safe Storage。",
+    });
+  }
   let blob: Buffer;
   try {
     blob = Buffer.from(cipher, "base64");
@@ -75,28 +81,10 @@ function decryptLinux(blob: Buffer): DecryptResult {
   });
 }
 
-function decryptMac(blob: Buffer): DecryptResult {
-  const prefix = peekOscryptPrefix(blob);
-  if (!prefix) {
-    throw new AgentwatchError("auth", "macOS 凭据密文缺少 Electron OSCrypt 前缀（v10/v11）。");
-  }
-  const passwords = macKeychainPasswords();
-  if (passwords.length === 0) {
-    throw new AgentwatchError("auth", "无法从钥匙串读取 Grok Bot Safe Storage 密钥。", {
-      hint: "请打开并登录官方 Grok Bot 桌面应用，并在系统钥匙串中允许本 CLI 读取（如有提示）。",
-    });
-  }
-  for (const [backend, password] of passwords) {
-    const pt = decryptOscrypt(blob, password, MAC_PBKDF2_ITERATIONS);
-    if (pt && isPlausibleSecret(pt)) return { plaintext: pt, backend };
-  }
-  // 极少数自定义构建可能用 1 次迭代。
-  for (const [backend, password] of passwords) {
-    const pt = decryptOscrypt(blob, password, LINUX_PBKDF2_ITERATIONS);
-    if (pt && isPlausibleSecret(pt)) return { plaintext: pt, backend: `${backend}-iter1` };
-  }
-  throw new AgentwatchError("auth", "已从钥匙串取到密钥，但无法解密官方 access token。", {
-    hint: "请打开并登录官方 Grok Bot。应用更新后密钥格式可能变化。",
+function decryptMac(_blob: Buffer): DecryptResult {
+  // 共享桌面鉴权在 macOS 上已关闭；保留函数只为不误走钥匙串。
+  throw new AgentwatchError("auth", desktopUnsupportedOnMacMessage(), {
+    hint: "macOS 不会访问钥匙串中的 Grok Bot Safe Storage。",
   });
 }
 

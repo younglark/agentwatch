@@ -92,11 +92,16 @@ export type Protocol = {
   sendMessage(input: { agentId: string; text: string; messageId?: string; sessionId?: string }): Promise<SendResult>;
 };
 
+export type TokenHolder = {
+  current(): AccessToken | Promise<AccessToken>;
+  reread(): AccessToken | Promise<AccessToken>;
+};
+
 export function createProtocol(opts: {
   baseUrl: string;
   tokenOpts?: LoadTokenOptions;
   /** 测试注入。 */
-  access?: { current(): AccessToken; reread(): AccessToken };
+  access?: TokenHolder;
 }): Protocol {
   const holder = opts.access ?? fileAccess(opts.tokenOpts ?? {});
   const interceptor = createRereadInterceptor(holder);
@@ -166,15 +171,15 @@ function fileAccess(tokenOpts: LoadTokenOptions) {
  * Bearer 只读拦截器：401 时再读一次 sand-secrets.json（不调用 refresh 接口），
  * 若 token 已变化则重试这一次 RPC（含发送）。不把 token 写进任何日志。
  */
-function createRereadInterceptor(access: { current(): AccessToken; reread(): AccessToken }): Interceptor {
+function createRereadInterceptor(access: TokenHolder): Interceptor {
   return (next) => async (req) => {
-    let tok = readUsableToken(() => access.current());
+    let tok = await readUsableToken(() => access.current());
     req.header.set("authorization", `Bearer ${tok.token}`);
     try {
       return await next(req);
     } catch (err) {
       if (!isUnauthenticated(err)) throw err;
-      const again = access.reread();
+      const again = await access.reread();
       if (isExpired(again) || !again.token || again.token === tok.token) {
         throw expiredError(again);
       }
@@ -184,10 +189,10 @@ function createRereadInterceptor(access: { current(): AccessToken; reread(): Acc
   };
 }
 
-function readUsableToken(load: () => AccessToken): AccessToken {
-  const first = load();
+async function readUsableToken(load: () => AccessToken | Promise<AccessToken>): Promise<AccessToken> {
+  const first = await load();
   if (!isExpired(first)) return first;
-  const second = load();
+  const second = await load();
   if (!isExpired(second) && second.token !== first.token) return second;
   throw expiredError(second);
 }

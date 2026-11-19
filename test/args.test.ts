@@ -57,3 +57,25 @@ test("--help 与 --version 不要求 --bot", () => {
   assert.deepEqual(parse(["--help"]), { kind: "help" });
   assert.deepEqual(parse(["-v"]), { kind: "version" });
 });
+
+test("解析 login / logout / service 子命令", () => {
+  assert.deepEqual(parse(["login"]), { kind: "login", json: false, apiBase: "https://api2.cursor.sh" });
+  const loginJson = parse(["--json", "login"]);
+  assert.equal(loginJson.kind, "login");
+  if (loginJson.kind === "login") assert.equal(loginJson.json, true);
+  assert.deepEqual(parse(["logout"]), { kind: "logout", json: false });
+  const st = parse(["service", "status"]);
+  assert.equal(st.kind, "service");
+  if (st.kind === "service") assert.equal(st.action, "status");
+  const runHidden = parse(["service", "run"]);
+  assert.equal(runHidden.kind, "service");
+  if (runHidden.kind === "service") assert.equal(runHidden.action, "run");
+});
+
+test("service 缺少动作是用法错误", () => {
+  assert.throws(() => parse(["service"]), (e: unknown) => {
+    assert(e instanceof AgentwatchError);
+    assert.equal(e.code, "usage");
+    return true;
+  });
+});

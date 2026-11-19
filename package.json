@@ -1,6 +1,6 @@
 {
   "name": "agentwatch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Wrap a non-interactive agent command and notify a Grok Bot when it finishes, fails, or times out.",
   "type": "module",
   "bin": {

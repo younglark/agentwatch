@@ -1,8 +1,13 @@
 import { AgentwatchError } from "./errors.js";
 
+export type ServiceAction = "status" | "start" | "stop" | "restart" | "run";
+
 export type CliArgs =
   | { kind: "help" }
   | { kind: "version" }
+  | { kind: "login"; json: boolean; apiBase: string }
+  | { kind: "logout"; json: boolean }
+  | { kind: "service"; action: ServiceAction; json: boolean }
   | {
       kind: "run";
       bot: string;
@@ -18,12 +23,19 @@ export type CliArgs =
 export const DEFAULT_TAIL_BYTES = 4096;
 export const DEFAULT_API_BASE = "https://api2.cursor.sh";
 
+const SERVICE_ACTIONS = new Set<ServiceAction>(["status", "start", "stop", "restart", "run"]);
+
 /**
  * 解析 argv。`--` 结束 flag；若命令以额外的 `--` 开头（例如 `-- -- echo`），会去掉这一层。
+ * 子命令：login / logout / service <status|start|stop|restart>。
  */
 export function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
-  if (args.length === 0) throw usage("缺少参数。需要 --bot <id> 以及 -- 之后的命令。");
+  if (args.length === 0) throw usage("缺少参数。需要 --bot <id> 以及 -- 之后的命令；或 login / logout / service。");
+
+  const sub = peekSubcommand(args);
+  if (sub === "help") return { kind: "help" };
+  if (sub === "version") return { kind: "version" };
 
   let bot: string | undefined;
   let timeoutSeconds = 0;
@@ -33,6 +45,7 @@ export function parseArgs(argv: string[]): CliArgs {
   let apiBase = process.env.AGENTWATCH_API_BASE?.trim() || DEFAULT_API_BASE;
   let secretsFile = process.env.AGENTWATCH_SECRETS_FILE?.trim() || undefined;
   const command: string[] = [];
+  const positionals: string[] = [];
   let seenEnd = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -85,7 +98,35 @@ export function parseArgs(argv: string[]): CliArgs {
       if (inline === undefined) i++;
       continue;
     }
-    throw usage(`未知参数：${a}。使用 --help 查看用法。`);
+    if (a.startsWith("-")) {
+      throw usage(`未知参数：${a}。使用 --help 查看用法。`);
+    }
+    positionals.push(a);
+  }
+
+  apiBase = apiBase.replace(/\/$/, "");
+
+  if (positionals[0] === "login") {
+    if (positionals.length > 1) throw usage("login 不接受额外参数。");
+    if (command.length) throw usage("login 不要跟在 -- 之后的命令一起使用。");
+    if (bot) throw usage("login 不使用 --bot。");
+    return { kind: "login", json, apiBase };
+  }
+  if (positionals[0] === "logout") {
+    if (positionals.length > 1) throw usage("logout 不接受额外参数。");
+    if (command.length) throw usage("logout 不要跟在 -- 之后的命令一起使用。");
+    return { kind: "logout", json };
+  }
+  if (positionals[0] === "service") {
+    const action = positionals[1] as ServiceAction | undefined;
+    if (!action || !SERVICE_ACTIONS.has(action) || positionals.length > 2) {
+      throw usage("service 需要一个动作：status、start、stop 或 restart。");
+    }
+    if (command.length) throw usage("service 不要跟在 -- 之后的命令一起使用。");
+    return { kind: "service", action, json };
+  }
+  if (positionals.length > 0) {
+    throw usage(`未知子命令：${positionals[0]}。使用 --help 查看用法。`);
   }
 
   if (command[0] === "--") command.shift();
@@ -103,9 +144,19 @@ export function parseArgs(argv: string[]): CliArgs {
     json,
     dryRun,
     tailBytes,
-    apiBase: apiBase.replace(/\/$/, ""),
+    apiBase,
     secretsFile,
   };
+}
+
+/** 在解析 flag 值之前，识别裸的 help/version 子命令。 */
+function peekSubcommand(args: string[]): "help" | "version" | undefined {
+  for (const a of args) {
+    if (a === "--") break;
+    if (a === "help") return "help";
+    if (a === "version") return "version";
+  }
+  return undefined;
 }
 
 function splitFlag(a: string): [string, string] | undefined {
@@ -139,6 +190,6 @@ function parseTailBytes(raw: string): number {
 
 function usage(message: string): AgentwatchError {
   return new AgentwatchError("usage", message, {
-    hint: "agentwatch --bot <agent-id> [--timeout <秒>] [--json] [--dry-run] -- -- <命令...>",
+    hint: "agentwatch --bot <agent-id> [--timeout <秒>] [--json] [--dry-run] -- -- <命令...>；或 agentwatch login | logout | service <status|start|stop|restart>",
   });
 }

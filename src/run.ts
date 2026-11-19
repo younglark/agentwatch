@@ -3,14 +3,20 @@ import { runChild, type ChildResult } from "./child.js";
 import { AgentwatchError, isAgentwatchError } from "./errors.js";
 import { EXIT } from "./exit.js";
 import { renderNotification, type RunStatus } from "./notify.js";
-import { createProtocol, DELIVERY_REFUSED, findBot, type Protocol, type SendResult } from "./protocol.js";
+import { createProtocol, DELIVERY_REFUSED, findBot, type Protocol, type SendResult, type TokenHolder } from "./protocol.js";
 import type { CliArgs } from "./args.js";
+import { authMode } from "./auth/platform.js";
+import { resolveAgentwatchHome } from "./auth/home.js";
+import { daemonTokenHolder } from "./service/access.js";
 
 export type RunDeps = {
   protocol?: Protocol;
   runChild?: typeof runChild;
   hostname?: string;
   now?: () => number;
+  platform?: NodeJS.Platform;
+  tokenHolder?: TokenHolder;
+  home?: string;
 };
 
 export type RunResult = {
@@ -34,11 +40,20 @@ export async function runWatch(
   deps: RunDeps = {},
 ): Promise<{ result: RunResult; processExit: number }> {
   const host = deps.hostname ?? hostname();
+  const platform = deps.platform ?? process.platform;
   const protocol =
     deps.protocol ??
     createProtocol({
       baseUrl: args.apiBase,
-      tokenOpts: { secretsFile: args.secretsFile },
+      tokenOpts: { secretsFile: args.secretsFile, platform },
+      access:
+        deps.tokenHolder ??
+        (authMode(platform) === "independent"
+          ? daemonTokenHolder({
+              home: deps.home ?? resolveAgentwatchHome({ platform }),
+              json: args.json,
+            })
+          : undefined),
     });
   const spawn = deps.runChild ?? runChild;
 

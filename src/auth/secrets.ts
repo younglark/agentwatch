@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { AgentwatchError } from "../errors.js";
+import { authMode, desktopUnsupportedOnMacMessage } from "./platform.js";
 
 export type CursorAccount = {
   id: string;
@@ -122,6 +123,11 @@ export function parseSandSecrets(raw: string, path: string, variant: SandSecrets
 
 export function loadSandSecrets(opts?: Partial<SecretsPaths> & { path?: string }): SandSecrets {
   const platform = opts?.platform ?? process.platform;
+  if (authMode(platform) === "independent") {
+    throw new AgentwatchError("auth", desktopUnsupportedOnMacMessage(), {
+      hint: "请运行 agentwatch login。macOS 不会读取官方 sand-secrets.json。",
+    });
+  }
   const home = opts?.home ?? homedir();
   const env = opts?.env ?? process.env;
   const candidates = opts?.path

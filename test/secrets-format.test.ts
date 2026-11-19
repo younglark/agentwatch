@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { listSecretsCandidates, parseSandSecrets, loadSandSecrets } from "../src/auth/secrets.js";
+import { loadAccessToken } from "../src/auth/token.js";
+import { decryptSafeStorage } from "../src/auth/decrypt.js";
 import { AgentwatchError } from "../src/errors.js";
 import { EXIT } from "../src/exit.js";
+import { authMode } from "../src/auth/platform.js";
 
 test("cursor-accounts 可以是 JSON 字符串，并选用 active 账号", () => {
   const raw = JSON.stringify({
@@ -109,4 +112,40 @@ test("loadSandSecrets 能从临时目录读到稳定版文件", () => {
   const loaded = loadSandSecrets({ platform: "linux", home, env: {} });
   assert.equal(loaded.variant, "Grok Bot");
   assert.equal(loaded.account.accessTokenCipher, "djEwZZ");
+});
+
+test("平台路由：darwin 为独立鉴权，linux/win32 为桌面共享鉴权", () => {
+  assert.equal(authMode("darwin"), "independent");
+  assert.equal(authMode("linux"), "desktop");
+  assert.equal(authMode("win32"), "desktop");
+});
+
+test("macOS 不会走共享桌面凭据或钥匙串", () => {
+  assert.throws(
+    () => loadSandSecrets({ platform: "darwin", home: "/Users/me", env: {} }),
+    (e: unknown) => {
+      assert(e instanceof AgentwatchError);
+      assert.equal(e.code, "auth");
+      assert.equal(e.exitCode, EXIT.AUTH);
+      assert.match(e.message, /独立鉴权|不会读取官方/);
+      return true;
+    },
+  );
+  assert.throws(
+    () => loadAccessToken({ platform: "darwin", home: "/Users/me", env: {} }),
+    (e: unknown) => {
+      assert(e instanceof AgentwatchError);
+      assert.equal(e.code, "auth");
+      return true;
+    },
+  );
+  assert.throws(
+    () => decryptSafeStorage("djEwAAAA", { platform: "darwin" }),
+    (e: unknown) => {
+      assert(e instanceof AgentwatchError);
+      assert.equal(e.code, "auth");
+      assert.doesNotMatch(e.message, /钥匙串读取|Safe Storage 密钥/);
+      return true;
+    },
+  );
 });
