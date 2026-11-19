@@ -1,0 +1,41 @@
+{
+  "name": "agentwatch",
+  "version": "0.1.0",
+  "description": "Wrap a non-interactive agent command and notify a Grok Bot when it finishes, fails, or times out.",
+  "type": "module",
+  "bin": {
+    "agentwatch": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "agentwatch": "node dist/cli.js",
+    "prepare": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/younglark/agentwatch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/younglark/agentwatch/issues"
+  },
+  "homepage": "https://github.com/younglark/agentwatch#readme",
+  "dependencies": {
+    "@bufbuild/protobuf": "1.10.1",
+    "@connectrpc/connect": "1.6.1",
+    "@connectrpc/connect-node": "1.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
