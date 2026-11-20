@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+263 |   });
+264 |   check('gbc notification receipt fields are bounded and redact credential-shaped values',async h=>{
+265 |     h.mockNotifications({envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',dispatched:true,delivery:'accepted_temporal',delivery_code:2,workflow_id:'Bearer SYNTHETIC_PRIVATE_TOKEN',unexpected:'SECRET_UNEXPECTED'}}});
+266 |     const run=await h.call('run',['--bot','test-bot','--request-id','notice-safe-receipt','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+267 |     const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);
+268 |     expect(result.value.data.notification.receipt.workflow_id).toBeNull();expect(result.out).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect(result.out).not.toContain('SECRET_UNEXPECTED');expect(result.out.length).toBeLessThan(2000);
+                                                                     ^
+error: expect(received).toBeNull()
+
+Received: "Bearer SYNTHETIC_PRIVATE_TOKEN"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:268:64)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: gbc notification receipt fields are bounded and redact credential-shaped values [753.82ms]
+
+ 0 pass
+ 50 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [864.00ms]

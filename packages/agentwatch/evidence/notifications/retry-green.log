@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification retries only proven pre-dispatch retryable failures with a fixed budget [1888.96ms]
+
+ 1 pass
+ 36 filtered out
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [2.00s]

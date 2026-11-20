@@ -29,6 +29,42 @@ printf '%s\\n' ${quote(json)} ${code===0?'':'>&2'}
 exit ${code}
 `,{mode:0o700});
   }
+  const ok=(data:unknown)=>({schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data});
+  function mockNotifications(options:{code?:number;envelope?:unknown;extra?:string;status?:unknown;statusCode?:number;statusExtra?:string}={}) {
+    const send=options.envelope??ok({agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',dispatched:true,delivery:'accepted_temporal',delivery_code:2,mode:'temporal',mode_code:1,workflow_id:'workflow-fixture',refusal:null});
+    const status=options.status??ok({agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',status:'not_found',status_code:1,echo_entry_id:null,rejection_code:null,accepted_at_ms:null});
+    const expression=(value:unknown)=>(typeof value==='string'?value:JSON.stringify(value)).split('__MESSAGE_ID__').map(quote).join('"$message"');
+    writeFileSync(join(bin,'gbc'),`#!/bin/sh
+[ "$PATH" = ${quote(bin)} ] && [ "${'$'}{GBT_MOCK+x}" != x ] || exit 2
+if [ "$#" -eq 4 ] && [ "$1" = --json ] && [ "$2" = bot ] && [ "$3" = get ] && [ "$4" = --agent-id=test-bot ]; then
+printf '%s\\n' ${quote(JSON.stringify(ok({bot:{agent_id:'test-bot'}})))}
+exit 0
+fi
+if [ "$#" -eq 7 ] && [ "$1" = --json ] && [ "$2" = --allow-writes ] && [ "$3" = message ] && [ "$4" = send ] && [ "$5" = --agent-id=test-bot ] && [ "$7" = --text-stdin ]; then
+message=${'$'}{6#--message-id=}
+IFS= read -r body
+printf '%s\\n' "$body" > ${quote(join(root,'notification-body'))}
+printf '{"pid":%s,"message_id":"%s"}\\n' "$$" "$message" >> ${quote(join(root,'notification-calls'))}
+${options.extra??''}
+printf '%s\\n' ${expression(send)} ${(options.code??0)===0?'':'>&2'}
+exit ${options.code??0}
+fi
+if [ "$#" -eq 5 ] && [ "$1" = --json ] && [ "$2" = message ] && [ "$3" = status ] && [ "$4" = --agent-id=test-bot ]; then
+message=${'$'}{5#--message-id=}
+printf '%s\\n' "$message" >> ${quote(join(root,'reconciliation-calls'))}
+printf '%s\\n' "$$" >> ${quote(join(root,'reconciliation-pids'))}
+${options.statusExtra??''}
+printf '%s\\n' ${expression(status)} ${(options.statusCode??0)===0?'':'>&2'}
+exit ${options.statusCode??0}
+fi
+exit 2
+`,{mode:0o700});
+  }
+  function notificationCalls():Array<{pid:number;message_id:string}> {
+    const file=join(root,'notification-calls');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
+  }
+  function reconciliationPids():number[]{const file=join(root,'reconciliation-pids');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').map(Number):[];}
+  function nativeFixture(exitCode=0){const file=join(bin,'claude');writeFileSync(file,`#!/bin/sh\nprintf "SECRET_NATIVE_LOG\\n"\nexit ${exitCode}\n`,{mode:0o700});return file;}
   async function startHost() {
     const p=Bun.spawn([...host,state],{env,cwd:host.length===1?dirname(host[0]!):undefined,stdout:'ignore',stderr:'ignore'});owned.add(p.pid);
     return until(async()=>{
@@ -43,14 +79,15 @@ exit ${code}
   }
   async function cleanup() {
     try{const info=readRegistration(state);if(info){owned.add(info.pid);await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);}}catch{}
-    for(const receipt of receipts())owned.add(receipt.pid);
+    for(const receipt of [...receipts(),...notificationCalls()])owned.add(receipt.pid);
+    for(const pid of reconciliationPids())owned.add(pid);
     for(const pid of owned) {
       if(!alive(pid))continue;
       const args=readFileSync(`/proc/${pid}/cmdline`,'utf8');
-      if(!args.includes(state)&&!args.includes(cwd))throw new Error('Refuse cleanup of unrecognized PID');
+      if(!args.includes(state)&&!args.includes(cwd)&&!args.includes(join(bin,'gbc')))throw new Error('Refuse cleanup of unrecognized PID');
       process.kill(pid,'SIGKILL');await until(async()=>alive(pid),v=>!v,3000);
     }
     rmSync(root,{recursive:true,force:true});
   }
-  return {root,state,cwd,home,bin,env,mockGbc,call,startHost,receipts,cleanup};
+  return {root,state,cwd,home,bin,env,mockGbc,mockNotifications,notificationCalls,reconciliationPids,nativeFixture,call,startHost,receipts,cleanup};
 }

@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification simulated stays unknown and cannot auto-replay after restart [1243.48ms]
+(pass) source CLI: gbc notification wrong-message stays unknown and cannot auto-replay after restart [1221.67ms]
+(pass) source CLI: gbc notification absent transport preserves pending across daemon restart [1357.93ms]
+
+ 3 pass
+ 55 filtered out
+ 0 fail
+ 27 expect() calls
+Ran 3 tests across 1 file. [3.95s]

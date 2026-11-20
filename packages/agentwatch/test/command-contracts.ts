@@ -83,7 +83,7 @@ fi
     expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('BOT_FORBIDDEN');
     expect(ledgerRows(h.state,'gbc-missing')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
     const health=await request(readRegistration(h.state)!,'health',{});
-    expect(health.bot_verifier).toBe('gbc');expect(health.notification_transport).toBe('not_configured');
+    expect(health.bot_verifier).toBe('gbc');expect(health.notification_transport).toBe('gbc');
   });
   check('production gbc exact agent_id admits a fixture and rechecks before launch',async h=>{
     h.env.GBT_MOCK='1';
@@ -158,6 +158,133 @@ fi
     expect(run.code,run.err).toBe(0);expect(ledgerRows(h.state,'gbc-expired')).toHaveLength(1);
     const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);
     expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(existsSync(join(h.cwd,'launched'))).toBe(false);
+  });
+  check('gbc notification acceptance is persisted once without claiming durable delivery',async h=>{
+    h.mockNotifications();
+    const args=['--bot','test-bot','--request-id','notify-accepted','--cwd',h.cwd,'--',h.nativeFixture(),'SECRET_ARGV'];
+    const run=await h.call('run',args);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+    const accepted=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
+    expect(accepted.value.data.state).toBe('succeeded');expect(accepted.value.data.notification).toMatchObject({transport:'gbc',attempts:1,needs_reconciliation:false,receipt:{delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:'workflow-fixture'}});
+    expect(accepted.out).not.toContain('SECRET_');expect(accepted.out).not.toContain('delivered');
+    const body=readFileSync(join(h.root,'notification-body'),'utf8');expect(body.length).toBeLessThan(1024);expect(body).not.toContain('SECRET_');
+    expect(Object.keys(JSON.parse(body))).toEqual(['version','event_id','task_id','state','exit_code','error_code']);
+    expect(JSON.parse(body)).toMatchObject({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null});
+    expect((await h.call('run',args)).value.data.id).toBe(id);
+    const info=readRegistration(h.state)!;expect((await request(info,'health',{})).notification_transport).toBe('gbc');
+    await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification).toEqual(accepted.value.data.notification);
+    expect(h.notificationCalls()).toHaveLength(1);expect(ledgerRows(h.state,'notify-accepted')).toHaveLength(1);
+  });
+  check('gbc notification explicit refusal is persistent and never changes task success',async h=>{
+    h.mockNotifications({code:7,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'refused',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',dispatched:false,delivery:'refused',delivery_code:4,workflow_id:'workflow-refused',refusal:{failure_code:'denied',message:'SECRET_REFUSAL'}}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-refused','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+    const rejected=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='rejected',4000);
+    expect(rejected.value.data.state).toBe('succeeded');expect(rejected.value.data.notification).toMatchObject({attempts:1,needs_reconciliation:false,last_code:'SEND_REFUSED',receipt:{delivery:'refused',delivery_code:4,dispatched:false,workflow_id:'workflow-refused'}});
+    expect(rejected.out).not.toContain('SECRET_REFUSAL');expect((await h.call('wait',[id,'--timeout','0'])).code).toBe(0);
+    await h.call('status',[id]);expect(h.notificationCalls()).toHaveLength(1);
+  });
+  check('gbc notification proven not dispatched is separate from uncertain writes',async h=>{
+    h.mockNotifications({code:9,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_revoked',retryable:false,request_id:'fixture',error:{message:'SECRET_AUTH_DIAGNOSTIC',details:{rpc_dispatched:false}}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-not-dispatched','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='not_dispatched',4000);
+    expect(result.value.data.state).toBe('succeeded');expect(result.value.data.notification).toMatchObject({attempts:1,last_code:'NOT_DISPATCHED',needs_reconciliation:false});
+    expect(result.out).not.toContain('SECRET_AUTH_DIAGNOSTIC');expect(h.notificationCalls()).toHaveLength(1);
+  });
+  check('gbc notification retries only proven pre-dispatch retryable failures with a fixed budget',async h=>{
+    h.mockNotifications({code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_refresh_network',retryable:true,request_id:'fixture',error:{message:'SECRET_RETRY',details:{rpc_dispatched:false}}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-safe-retry','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='not_dispatched'&&r.value.data.notification.attempts===3,4000);
+    expect(result.value.data.state).toBe('succeeded');expect(result.out).not.toContain('SECRET_RETRY');
+    expect(h.notificationCalls()).toHaveLength(3);expect(new Set(h.notificationCalls().map(c=>c.message_id)).size).toBe(1);
+    const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification.attempts).toBe(3);expect(h.notificationCalls()).toHaveLength(3);
+  });
+  check('gbc notification daemon crash recovers inflight as unknown without replay',async h=>{
+    h.mockNotifications({extra:'while :; do :; done'});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-crash','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    await until(async()=>h.notificationCalls(),calls=>calls.length===1);
+    const old=readRegistration(h.state)!;expect((await h.call('status',[id])).value.data.notification.state).toBe('inflight');
+    process.kill(old.pid,'SIGKILL');await until(async()=>alive(old.pid),v=>!v,3000);
+    const sender=h.notificationCalls()[0]!.pid;if(alive(sender)){process.kill(sender,'SIGKILL');await until(async()=>alive(sender),v=>!v,3000);}
+    const restarted=await h.call('status',[id]);expect(restarted.code,restarted.err).toBe(0);
+    expect(restarted.value.data).toMatchObject({state:'succeeded',notification:{state:'unknown',attempts:1,needs_reconciliation:true,last_code:'INTERRUPTED_SEND'}});
+    await h.call('status',[id]);expect(h.notificationCalls()).toHaveLength(1);
+  });
+  check('gbc notification uncertain write reconciles by read-only send status without resending',async h=>{
+    h.mockNotifications({envelope:'SECRET_LOST_RESPONSE',status:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',status:'accepted',status_code:2,echo_entry_id:'echo-fixture',rejection_code:null,accepted_at_ms:'1794454564087'}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-reconcile','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.last_code==='STATUS_ACCEPTED',4000);
+    expect(result.value.data).toMatchObject({state:'succeeded',notification:{state:'accepted',attempts:1,reconciliation_attempts:1,receipt:{status:'accepted',status_code:2,echo_entry_id:'echo-fixture',accepted_at_ms:'1794454564087'}}});
+    expect(result.out).not.toContain('SECRET_LOST_RESPONSE');expect(result.out).not.toContain('delivered');expect(h.notificationCalls()).toHaveLength(1);
+    const reads=readFileSync(join(h.root,'reconciliation-calls'),'utf8').trim().split('\n');expect(reads).toEqual([h.notificationCalls()[0]!.message_id]);
+  });
+  for(const [delivery,delivery_code] of [['accepted_box',1],['duplicate',3]] as const)
+    check(`gbc notification preserves ${delivery} as acceptance evidence only`,async h=>{
+      h.mockNotifications({envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',dispatched:false,delivery,delivery_code,workflow_id:null}}});
+      const run=await h.call('run',['--bot','test-bot','--request-id','notice-'+delivery,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+      const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);
+      expect(result.value.data.notification.receipt).toMatchObject({delivery,delivery_code,dispatched:false,workflow_id:null});expect(h.notificationCalls()).toHaveLength(1);expect(result.out).not.toContain('delivered');
+    });
+  for(const [name,options] of [
+    ['timeout',{extra:'while :; do :; done'}],
+    ['lost-response',{extra:'exit 0'}],
+    ['bad-json',{envelope:'SECRET_RAW_RESPONSE'}],
+    ['unknown-outcome',{code:10,envelope:{schema_version:'1.0.0',ok:false,outcome:'unknown',code:'unknown',retryable:true,request_id:'fixture',error:{message:'SECRET_RAW_RESPONSE'}}}],
+    ['possibly-dispatched',{code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unavailable',retryable:true,request_id:'fixture',error:{message:'SECRET_RAW_RESPONSE',details:{rpc_dispatched:true}}}}],
+    ['simulated',{envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',simulated:true,data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:null}}}],
+    ['wrong-message',{envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'other-message',delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:null}}}],
+    ['contradictory-dispatch',{code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unavailable',retryable:true,request_id:'fixture',error:{details:{rpc_dispatched:false}},data:{delivery:'accepted_temporal',dispatched:true}}}],
+    ['oversized-stdout',{extra:`while :; do printf '%s' '${'x'.repeat(4096)}'; done`}],
+    ['oversized-stderr',{extra:`while :; do printf '%s' '${'x'.repeat(4096)}' >&2; done`}],
+  ] as const)check(`gbc notification ${name} stays unknown and cannot auto-replay after restart`,async h=>{
+    h.mockNotifications(options);
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-'+name,'--cwd',h.cwd,'--',h.nativeFixture(name==='bad-json'?7:0)]);expect(run.code).toBe(0);const id=run.value.data.id;
+    const unknown=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='unknown'&&r.value.data.notification.reconciliation_attempts===1,6500);
+    expect(unknown.value.data.notification).toMatchObject({attempts:1,needs_reconciliation:true});expect(unknown.value.data.state).toBe(name==='bad-json'?'failed':'succeeded');
+    expect(unknown.out).not.toContain('SECRET_RAW_RESPONSE');expect(unknown.out.length).toBeLessThan(2000);expect(h.notificationCalls()).toHaveLength(1);
+    const sender=h.notificationCalls()[0]!.pid;expect(alive(sender)).toBe(false);
+    const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification).toEqual(unknown.value.data.notification);expect(h.notificationCalls()).toHaveLength(1);
+    expect(readFileSync(join(h.root,'reconciliation-calls'),'utf8').trim().split('\n')).toHaveLength(1);
+  });
+  check('gbc notification absent transport preserves pending across daemon restart',async h=>{
+    const host=(await h.startHost())!;
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-unconfigured','--cwd',h.cwd,'--','claude']);expect(run.code).toBe(0);const id=run.value.data.id;
+    expect((await h.call('wait',[id,'--timeout','5'])).value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});
+    await request(host,'shutdown',{});await until(async()=>alive(host.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0,event_id:id+':terminal:1'});
+    expect((await request(readRegistration(h.state)!,'health',{})).notification_transport).toBe('not_configured');expect(h.notificationCalls()).toHaveLength(0);
+    h.mockNotifications();const restored=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
+    expect(restored.value.data.notification).toMatchObject({event_id:id+':terminal:1',attempts:1});expect(h.notificationCalls()).toHaveLength(1);
+  });
+  check('gbc notification drain aborts a hung sender and persists uncertainty within a bounded stop',async h=>{
+    h.mockNotifications({extra:'while :; do :; done'});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-drain','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    await until(async()=>h.notificationCalls(),c=>c.length===1);const info=readRegistration(h.state)!;
+    const started=Date.now();expect((await request(info,'drain',{})).active).toBe(0);expect(Date.now()-started).toBeLessThan(1500);
+    expect(alive(h.notificationCalls()[0]!.pid)).toBe(false);
+    expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'unknown',needs_reconciliation:true,attempts:1});expect(h.notificationCalls()).toHaveLength(1);
+    await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+  });
+  check('gbc notification receipt fields are bounded and redact credential-shaped values',async h=>{
+    h.mockNotifications({envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',dispatched:true,delivery:'accepted_temporal',delivery_code:2,workflow_id:'Bearer SYNTHETIC_PRIVATE_TOKEN',unexpected:'SECRET_UNEXPECTED'}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-safe-receipt','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+    const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);
+    expect(result.value.data.notification.receipt.workflow_id).toBeNull();expect(result.out).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect(result.out).not.toContain('SECRET_UNEXPECTED');expect(result.out.length).toBeLessThan(2000);
+  });
+  for(const [status,status_code,expected] of [['rejected',3,'rejected'],['pending',4,'unknown'],['unknown_durability',5,'unknown']] as const)
+    check(`gbc notification read-only ${status} never implies durable delivery or a resend`,async h=>{
+      h.mockNotifications({extra:'exit 0',status:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',status,status_code,echo_entry_id:null,rejection_code:status==='rejected'?'denied':null,accepted_at_ms:null}}});
+      const run=await h.call('run',['--bot','test-bot','--request-id','notice-status-'+status,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+      const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state===expected&&r.value.data.notification.reconciliation_attempts===1,4000);
+      expect(result.value.data.notification).toMatchObject({attempts:1,durability:'unverified',needs_reconciliation:expected==='unknown'});expect(h.notificationCalls()).toHaveLength(1);expect(result.out).not.toContain('delivered');
+    });
+  check('gbc notification drain also aborts read-only reconciliation without leaking its process',async h=>{
+    h.mockNotifications({extra:'exit 0',statusExtra:'while :; do :; done'});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-drain-status','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+    await until(async()=>h.reconciliationPids(),p=>p.length===1);const info=readRegistration(h.state)!;
+    const started=Date.now();await request(info,'drain',{});expect(Date.now()-started).toBeLessThan(1500);expect(alive(h.reconciliationPids()[0]!)).toBe(false);
+    expect((await h.call('status',[run.value.data.id])).value.data.notification).toMatchObject({state:'unknown',attempts:1,reconciliation_attempts:1});expect(h.notificationCalls()).toHaveLength(1);
   });
   check('bot denial, program allowlist and malformed requests fail without stdout or spawn',async h=>{
     await h.startHost();

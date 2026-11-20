@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification daemon crash recovers inflight as unknown without replay [1617.60ms]
+(pass) source CLI: gbc notification uncertain write reconciles by read-only send status without resending [743.53ms]
+
+ 2 pass
+ 37 filtered out
+ 0 fail
+ 11 expect() calls
+Ran 2 tests across 1 file. [2.49s]

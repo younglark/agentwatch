@@ -1,4 +1,79 @@
-# t183 独立审查 P2：结构化鉴权错误映射修复 — current
+# t183 后续：外部 gbc 通知 transport 与持久状态 — current
+
+2026-11-20，Asia/Shanghai。固定基线 `a9cb935f2a67e659f5f5cc93845fcc4227ee6eb6`。
+身份适配已独立审查后继续本切片。只实现/测试外部 CLI 通知与本地状态，没有真实发送。
+旧章节里的「通知未实现/搁置」均为历史；本节与 README 描述当前边界。
+
+## 实现结果
+
+- 新 `src/notifications.ts`：独立于任务执行的通知 worker，通过外部 gbc 的已核 CLI
+  message send + --text-stdin 发送六字段冻结结果 JSON，只读 message status 对账。
+  不发日志、argv、cwd、报告文件或 request_id；不总结、不读取 history/transcript。
+- 新 `migrations/002.sql` 与 storage 公共方法：显式 pending / inflight / accepted /
+  rejected / not_dispatched / unknown；claim 先持久化，再启动外部副作用；稳定本地
+  event_id 不改，message_id 仅首次生成。001 内容/checksum 不变，旧库逐版校验升级。
+  旧 delivered 列不重用：0 → pending，非 0 → unknown/LEGACY_DELIVERY_UNVERIFIED。
+- 启动恢复 inflight → unknown；accepted/unknown 不重发。unknown 有 message_id 时
+  最多一次持久记录的自动只读 send status；accepted/rejected 可更新接受路径分类，
+  其它结果维持 unknown，不会因 not_found、pending、unknown_durability 而补发。
+- 唯一可重试路径是 known_failure、无 data、rpc_dispatched:false、retryable:true、
+  gbc exit8；三次总预算，250/500ms 退避，预算和时间落盘。矛盾、未知或可能已写不重试。
+- status/wait 公开独立通知状态、计数、下次时间、有限白名单 receipt、last_code、
+  needs_reconciliation；durability 永远 unverified。任务终态/退出码不受通知失败影响。
+- 3 秒超时、stdout/stderr 各 1 MiB，stdin 结束，无 shell，无 token 参数；不回显原始
+  两路输出、错误详情、refusal.message 或多余响应字段。明显凭据形态/超长 receipt ID
+  省略为 null，不截短后冒充原始值。drain abort 当前发送/查询进程，观察 close 后落盘。
+- health.notification_transport 在可定位外部 gbc 时为 gbc，否则 not_configured；
+  testhost 未配置发送，仍 not_configured。bot_verifier 既有语义与 fake 防绕过保持。
+
+上游路径/参数/枚举/结果封套及 OpenCode 失败机制差异见
+`evidence/notifications/upstream-contract.md`，只读核对 npm-v0.7.0，没有运行真实 gbc。
+
+## TDD 与完整验证
+
+迁移、接受、拒绝、明确未 dispatch、有界安全重试、inflight 恢复、只读对账、其它
+接受枚举、回执保密、矛盾 non-dispatch 证据均先实际 red，再最少代码 green。
+red/green 日志保存在 `evidence/notifications/`。迁移测试初始建旧表语句的占位数修正，
+及旧「更新所有迁移行为999」在双版本下的主键冲突，均在最终验收前修正；不是通过证据。
+没有新私有函数测试；仍只用约定 core/store、公共 CLI/IPC 与编译 seams。
+
+新增 25 个共享源码/编译 CLI 契约与 1 个历史库迁移测试，覆盖：接受回执持久化与重启
+不再发送、拒绝不污染任务、未 dispatch 分类、三次预算、崩溃未知不重放、只读接受/
+拒绝/未决/未知持久性、超时/丢响应/坏 JSON/双流超限/模拟/错 ID/矛盾证据不重放、
+缺 gbc 保留 pending 且恢复后可发送、发送/查询 drain 都有界且进程消失、秘密不外发。
+mock shell 内建命令计数，临时 HOME/PATH；编译测试复制二进制、隔离 cwd 并暂移源码。
+
+正式包和原 spike 均完整 `bun run verify`，exit **0**；两包类型检查通过：
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| 正式源码 | 77 / 0 | 515 | 59.25s |
+| 正式编译 | 56 / 0 | 428 | 28.57s |
+| spike 源码 | 11 / 0 | 194 | 27.41s |
+| spike 编译 | 11 / 0 | 194 | 10.80s |
+
+日志：`evidence/notifications/{verify,spike-regression}.log`。
+Bun 1.4.4；生产二进制 109,959,344 bytes，独立 test-host 109,643,952 bytes；
+SHA256 见同目录 artifacts.txt。任务进程审计无残留，见 cleanup-audit.json。
+这是 Linux/procfs 和 /bin/sh 内建 mock 的验收，不是跨平台或干净 VM 证明。
+
+## 未覆盖与故意保守的缺口
+
+- 没有真实发送、登录、真实 ~/.gbc/官方凭据读取、后端访问、OAuth 刷新、真实 bot/
+  团队绑定、四家 CLI E2E、progress、report 文件采集或 summarize。
+- 服务端稳定 ID 去重和持久入箱 ACK 未证明；不承诺 exactly-once，不把 accepted/
+  duplicate/accepted_box、echo、accepted_at 当已读或任务业务成功，也不声称完整原始
+  HTTP receipt 已捕获。
+- 自动只读对账只一次，可能早于远端最终可见；后续本地结论覆写/再次手工对账命令
+  未实现。status 保留未知和关联 ID；外部人工 gbc status 不会自动回写本地账本。
+- 不验证恶意同 UID 替换 gbc、任意同 UID 篡改库、进程树取消、Windows ACL、日志保留
+  和分发升级；PATH 上外部 gbc/Node 仍由操作者信任与维护。
+
+未 push / PR / merge / 发布；本地单独提交后停止扩展，等待父代理独立复审。
+
+---
+
+# t183 独立审查 P2：结构化鉴权错误映射修复 — historical
 
 2026-11-20，Asia/Shanghai。固定基线 `94dd83de453ae1eae7617110897ed9c0f13ec3e3`。
 本轮仅修独立 Spec 审查发现的 P2，不实现通知、不改变外部 gbc 边界。

@@ -1,0 +1,21 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+3 | import { join,dirname } from 'node:path';
+4 | import { readRegistration,request,type Registration } from '../src/service.ts';
+5 | export const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+6 | export function alive(pid:number) {try{return !readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1]!.startsWith('Z');}catch{return false;}}
+7 | export async function until<A>(fn:()=>Promise<A>,predicate:(a:A)=>boolean,timeout=8000):Promise<A> {
+8 |   const end=Date.now()+timeout;for(;;){const value=await fn();if(predicate(value))return value;if(Date.now()>end)throw new Error('Condition timed out');await sleep(20);}
+                                                                                                                               ^
+error: Condition timed out
+      at until (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:8:124)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:181:26)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: gbc notification explicit refusal is persistent and never changes task success [4794.15ms]
+
+ 0 pass
+ 34 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [4.91s]

@@ -1,0 +1,13 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification read-only rejected never implies durable delivery or a resend [807.68ms]
+(pass) source CLI: gbc notification read-only pending never implies durable delivery or a resend [744.69ms]
+(pass) source CLI: gbc notification read-only unknown_durability never implies durable delivery or a resend [795.66ms]
+(pass) source CLI: gbc notification drain also aborts read-only reconciliation without leaking its process [855.66ms]
+
+ 4 pass
+ 52 filtered out
+ 0 fail
+ 17 expect() calls
+Ran 4 tests across 1 file. [3.33s]

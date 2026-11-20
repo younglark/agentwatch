@@ -1,0 +1,43 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+259 |   }
+260 |   raw.close();chmodSync(file,0o600);
+261 |   let db:Awaited<ReturnType<typeof openStorage>>|undefined;
+262 |   try{
+263 |     db=await openStorage(state);const rows=await db.store.outbox();
+264 |     expect(rows).toMatchObject([{state:'pending',delivered:0},{state:'unknown',delivered:1,last_code:'LEGACY_DELIVERY_UNVERIFIED'}]);
+                       ^
+error: expect(received).toMatchObject(expected)
+
+  [
+    {
+      "delivered": 0,
+-     "state": "pending",
++     "event_id": "11111111-1111-4111-8111-111111111111:terminal:1",
++     "payload": "{"version":1,"event_id":"11111111-1111-4111-8111-111111111111:terminal:1","task_id":"11111111-1111-4111-8111-111111111111","state":"succeeded","exit_code":0,"error_code":null}",
++     "task_id": "11111111-1111-4111-8111-111111111111",
++     "terminal": "succeeded",
+    },
+    {
+      "delivered": 1,
+-     "last_code": "LEGACY_DELIVERY_UNVERIFIED",
+-     "state": "unknown",
++     "event_id": "22222222-2222-4222-8222-222222222222:terminal:1",
++     "payload": "{"version":1,"event_id":"22222222-2222-4222-8222-222222222222:terminal:1","task_id":"22222222-2222-4222-8222-222222222222","state":"succeeded","exit_code":0,"error_code":null}",
++     "task_id": "22222222-2222-4222-8222-222222222222",
++     "terminal": "succeeded",
+    },
+  ]
+
+- Expected  - 3
++ Received  + 8
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:264:18)
+(fail) notification migration preserves legacy pending and never invents durable delivery [21.71ms]
+
+ 0 pass
+ 18 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [134.00ms]

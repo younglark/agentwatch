@@ -1,5 +1,5 @@
 import { test, expect, spyOn } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync,chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openStorage } from '../src/storage.ts';
@@ -99,7 +99,7 @@ test('outbox insertion failure rolls back terminal state',async()=>{
 });
 test('future migration versions fail closed rather than rewriting schema',async()=>{
   const state=mkdtempSync(join(tmpdir(),'aw-core-')),db=await openStorage(state);await db.close();
-  const raw=new Database(join(state,'tasks.sqlite'));raw.run('UPDATE migrations SET version=999');raw.close();
+  const raw=new Database(join(state,'tasks.sqlite'));raw.run('UPDATE migrations SET version=999 WHERE version=(SELECT MAX(version) FROM migrations)');raw.close();
   try{await expect(openStorage(state)).rejects.toMatchObject({code:'VERSION_MISMATCH'});}finally{rmSync(state,{recursive:true,force:true});}
 });
 
@@ -244,4 +244,25 @@ test('directory-swap cleanup still disposes engine, store and temp dir if path r
     await engine.close().catch(()=>{});await db.close().catch(()=>{});rmSync(root,{recursive:true,force:true});
     throw error;
   }
+});
+
+import initialMigration from '../src/migrations/001.sql' with {type:'text'};
+import { createHash } from 'node:crypto';
+test('notification migration preserves legacy pending and never invents durable delivery',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-notice-migration-')),file=join(state,'tasks.sqlite');
+  const raw=new Database(file);
+  raw.exec(initialMigration);raw.exec('CREATE TABLE migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)');
+  raw.query('INSERT INTO migrations VALUES(1,?)').run(createHash('sha256').update(initialMigration).digest('hex'));
+  for(const [id,delivered] of [['11111111-1111-4111-8111-111111111111',0],['22222222-2222-4222-8222-222222222222',1]] as const){
+    raw.query('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,id,'old-fingerprint',JSON.stringify({request_id:id,bot:'test-bot',cwd:state,argv:['claude']}),'succeeded',null,0,null,1,1);
+    raw.query('INSERT INTO outbox VALUES(?,?,?,?,?)').run(id+':terminal:1',id,'succeeded',JSON.stringify({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null}),delivered);
+  }
+  raw.close();chmodSync(file,0o600);
+  let db:Awaited<ReturnType<typeof openStorage>>|undefined;
+  try{
+    db=await openStorage(state);const rows=await db.store.outbox();
+    expect(rows).toMatchObject([{state:'pending',delivered:0},{state:'unknown',delivered:1,last_code:'LEGACY_DELIVERY_UNVERIFIED'}]);
+    const first=rows[0]!;await db.store.finish(first.task_id,'failed',1);expect(await db.store.outbox()).toHaveLength(2);
+    await db.close();db=await openStorage(state);expect(await db.store.outbox()).toEqual(rows);
+  }finally{await db?.close();rmSync(state,{recursive:true,force:true});}
 });

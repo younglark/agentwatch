@@ -8,6 +8,12 @@ import { join } from 'node:path';
 import { closeSync,openSync,lstatSync,constants } from 'node:fs';
 import { CoreError,normalize,terminal,type RunInput,type State } from './domain.ts';
 import migration from './migrations/001.sql' with {type:'text'};
+import notificationMigration from './migrations/002.sql' with {type:'text'};
+export interface NotificationRecord {
+  event_id:string;task_id:string;terminal:string;payload:string;delivered:number;
+  state:string;message_id:string|null;attempts:number;next_attempt_at:number;
+  receipt:string|null;last_code:string|null;reconcile_attempts:number;
+}
 const tasks=sqliteTable('tasks',{
   id:text().primaryKey(),request_id:text().notNull(),fingerprint:text().notNull(),request:text().notNull(),
   state:text().notNull(),pid:integer(),exit_code:integer(),error_code:text(),created_at:integer().notNull(),updated_at:integer().notNull()
@@ -23,17 +29,18 @@ const make=Effect.gen(function*(){
     if(!rows[0])return yield* Effect.fail(new CoreError('NOT_FOUND','Task not found'));
     return rows[0];
   });
-  const digest=createHash('sha256').update(migration).digest('hex');
+  const migrations=[migration,notificationMigration].map(text=>({text,digest:createHash('sha256').update(text).digest('hex')}));
   yield* sql`PRAGMA foreign_keys=ON`;
   yield* sql.withTransaction(Effect.gen(function*(){
     yield* sql`CREATE TABLE IF NOT EXISTS migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)`;
     const versions=yield* sql<{version:number;checksum:string}>`SELECT version,checksum FROM migrations ORDER BY version`;
-    if(versions.length) {
-      if(versions.length!==1||versions[0]!.version!==1||versions[0]!.checksum!==digest)throw new CoreError('VERSION_MISMATCH','Unsupported database migration version');
-      return;
+    if(versions.length>migrations.length||versions.some((row,i)=>row.version!==i+1||row.checksum!==migrations[i]!.digest))
+      throw new CoreError('VERSION_MISMATCH','Unsupported database migration version');
+    for(let i=versions.length;i<migrations.length;i++){
+      const current=migrations[i]!;
+      for(const statement of current.text.split(';').map(s=>s.trim()).filter(Boolean))yield* sql.unsafe(statement);
+      yield* sql`INSERT INTO migrations(version,checksum) VALUES (${i+1},${current.digest})`;
     }
-    for(const statement of migration.split(';').map(s=>s.trim()).filter(Boolean))yield* sql.unsafe(statement);
-    yield* sql`INSERT INTO migrations(version,checksum) VALUES (1,${digest})`;
   }));
   const finish=(id:string,state:State,exit_code:number|null=null,error_code:string|null=null)=>sql.withTransaction(Effect.gen(function*(){
     const current=yield* get(id);if(terminal(current.state))return current;
@@ -83,10 +90,26 @@ const make=Effect.gen(function*(){
     recover:()=>run(sql.withTransaction(Effect.gen(function*(){
       const rows=yield* orm.select().from(tasks).where(inArray(tasks.state,['starting','running','cancelling']));
       for(const task of rows)yield* finish(task.id,'unknown',null,'OBSERVATION_LOST');
+      yield* sql`UPDATE outbox SET state='unknown',last_code='INTERRUPTED_SEND' WHERE state='inflight'`;
     }))),
     unknowns:async()=>run(orm.select({id:tasks.id}).from(tasks).where(eq(tasks.state,'unknown'))),
-    notification:async(id:string)=>(await run(sql<{event_id:string;delivered:number}>`SELECT event_id,delivered FROM outbox WHERE task_id=${id}`))[0],
-    outbox:()=>run(sql<{event_id:string;task_id:string;terminal:string;payload:string;delivered:number}>`SELECT * FROM outbox ORDER BY event_id`),
+    claimNotification:()=>run(sql.withTransaction(Effect.gen(function*(){
+      const rows=yield* sql<NotificationRecord & {request:string}>`SELECT outbox.*,tasks.request FROM outbox JOIN tasks ON tasks.id=outbox.task_id WHERE outbox.state='pending' AND next_attempt_at<=${Date.now()} ORDER BY event_id LIMIT 1`;
+      const row=rows[0];if(!row)return undefined;
+      const message_id=row.message_id??randomUUID();
+      yield* sql`UPDATE outbox SET state='inflight',message_id=${message_id},attempts=attempts+1 WHERE event_id=${row.event_id} AND state='pending'`;
+      return {...row,state:'inflight',message_id,attempts:row.attempts+1};
+    }))),
+    completeNotification:(event_id:string,result:{state:'accepted'|'rejected'|'not_dispatched'|'unknown'|'pending';code:string;receipt?:Record<string,unknown>;next_attempt_at?:number})=>run(sql`UPDATE outbox SET state=${result.state},last_code=${result.code},receipt=${result.receipt?JSON.stringify(result.receipt):null},next_attempt_at=${result.next_attempt_at??0} WHERE event_id=${event_id} AND state='inflight'`),
+    claimReconciliation:()=>run(sql.withTransaction(Effect.gen(function*(){
+      const rows=yield* sql<NotificationRecord & {request:string}>`SELECT outbox.*,tasks.request FROM outbox JOIN tasks ON tasks.id=outbox.task_id WHERE outbox.state='unknown' AND message_id IS NOT NULL AND reconcile_attempts=0 ORDER BY event_id LIMIT 1`;
+      const row=rows[0];if(!row)return undefined;
+      yield* sql`UPDATE outbox SET reconcile_attempts=1 WHERE event_id=${row.event_id} AND state='unknown'`;
+      return {...row,reconcile_attempts:1};
+    }))),
+    completeReconciliation:(event_id:string,result:{state:'accepted'|'rejected'|'unknown';code:string;receipt?:Record<string,unknown>})=>run(sql`UPDATE outbox SET state=${result.state},last_code=CASE WHEN ${result.state}='unknown' THEN last_code ELSE ${result.code} END,receipt=${result.receipt?JSON.stringify(result.receipt):null} WHERE event_id=${event_id} AND state='unknown'`),
+    notification:async(id:string)=>(await run(sql<NotificationRecord>`SELECT * FROM outbox WHERE task_id=${id}`))[0],
+    outbox:()=>run(sql<NotificationRecord>`SELECT * FROM outbox ORDER BY event_id`),
   };
 });
 export type Store=Effect.Success<typeof make>;

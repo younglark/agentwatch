@@ -1,0 +1,18 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification timeout stays unknown and cannot auto-replay after restart [4318.49ms]
+(pass) source CLI: gbc notification lost-response stays unknown and cannot auto-replay after restart [1237.33ms]
+(pass) source CLI: gbc notification bad-json stays unknown and cannot auto-replay after restart [1231.28ms]
+(pass) source CLI: gbc notification unknown-outcome stays unknown and cannot auto-replay after restart [1241.36ms]
+(pass) source CLI: gbc notification possibly-dispatched stays unknown and cannot auto-replay after restart [1228.66ms]
+(pass) source CLI: gbc notification oversized-stdout stays unknown and cannot auto-replay after restart [1212.94ms]
+(pass) source CLI: gbc notification oversized-stderr stays unknown and cannot auto-replay after restart [1231.66ms]
+(pass) source CLI: gbc notification absent transport preserves pending across daemon restart [1163.56ms]
+(pass) source CLI: gbc notification drain aborts a hung sender and persists uncertainty within a bounded stop [867.04ms]
+
+ 9 pass
+ 41 filtered out
+ 0 fail
+ 81 expect() calls
+Ran 9 tests across 1 file. [13.84s]

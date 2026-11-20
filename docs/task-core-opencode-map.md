@@ -78,3 +78,14 @@ PATH 定位外部 gbc，只执行 `--json bot get --agent-id=…`，验证结果
 不重复登录/RPC PoC，不打包 gbc/proto，不读官方凭据；health 的 gbc 仅指可执行文件可定位。
 此切片已经 mock gbc 源码/编译契约验证；live 身份、OAuth 刷新与四家 E2E 仍未验收。
 通用模块参考不变；当前完整边界与真实测试数见正式包 README / RESULTS。
+
+## t183 后续：通知 worker 差异（仅 mock，2026-11-20，Asia/Shanghai）
+
+沿用终态 + outbox 同事务、claim 在副作用前落盘、故障结果不谎称成功的参考机制，
+但不把 OpenCode 的 job/inbox ACK 当成远端 bot ACK。新增 002 迁移表达 pending /
+inflight / accepted / rejected / not_dispatched / unknown，原 delivered 列不复用。
+单独通知 worker 调外部 gbc message send（stdin 正文）；只有明确未 dispatch 且
+可重试才有三次持久预算。inflight 重启变 unknown；未知写不重发，仅一次只读
+message status 对账。drain abort 并观察有界子进程退出。通知结果不覆盖任务终态。
+这是 agentwatch 的差异，不是新增通用 PoC；没有引入 gbc/proto/App 运行依赖，
+没有真实发送或凭据访问。ACK/去重仍未证明；当前细节以正式包 README/RESULTS 为准。

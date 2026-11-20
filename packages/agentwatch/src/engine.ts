@@ -1,3 +1,4 @@
+import { createNotifier,type NotificationTransport } from './notifications.ts';
 import { readSync,closeSync,fstatSync } from 'node:fs';
 import { taskLogFile,openLogFile } from './log-files.ts';
 import { CoreError,normalize,terminal,integer,type RunInput } from './domain.ts';
@@ -5,18 +6,19 @@ import { publicTask,type Store,type TaskRecord } from './storage.ts';
 import { type Executor,type Verifier,type Child } from './process.ts';
 const pause=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 export interface EngineOptions {
-  store:Store;state:string;verify:Verifier;execute:Executor;
+  store:Store;state:string;verify:Verifier;execute:Executor;notifications?:NotificationTransport;
   hooks?:{beforeClaim?:(id:string)=>Promise<void>;beforeLaunch?:(id:string)=>Promise<void>};
   onError?:(error:unknown)=>void;
 }
 export async function createTaskEngine(options:EngineOptions) {
   const {store,state,verify,execute}=options;
   await store.recover();
+  const notifier=options.notifications?createNotifier(store,options.notifications,options.onError):undefined;
   let accepting=true,worker:Promise<void>|undefined;
   const children=new Map<string,Child>(),submissions=new Set<Promise<unknown>>();
   async function view(task:TaskRecord) {
     const notice=terminal(task.state)?await store.notification(task.id):undefined;
-    return {...publicTask(task),notification:{state:notice?(notice.delivered?'delivered':'pending'):'not_ready',transport:'not_configured',event_id:notice?.event_id??null}};
+    return {...publicTask(task),notification:{state:notice?.state??'not_ready',transport:options.notifications?.available()?'gbc':'not_configured',event_id:notice?.event_id??null,message_id:notice?.message_id??null,attempts:notice?.attempts??0,next_attempt_at:notice?.next_attempt_at??0,reconciliation_attempts:notice?.reconcile_attempts??0,last_code:notice?.last_code??null,needs_reconciliation:notice?.state==='unknown',durability:'unverified',receipt:notice?.receipt?JSON.parse(notice.receipt):null}};
   }
   async function work() {
     const task=(await store.queue())[0];if(!task||!accepting)return;
@@ -41,7 +43,7 @@ export async function createTaskEngine(options:EngineOptions) {
     } finally {children.delete(task.id);}
   }
   function kick() {
-    if(!accepting||worker)return;
+    if(!accepting)return;notifier?.kick();if(worker)return;
     worker=work().catch(e=>options.onError?.(e)).finally(()=>{worker=undefined;});
   }
   const timer=setInterval(kick,15);
@@ -56,12 +58,13 @@ export async function createTaskEngine(options:EngineOptions) {
     const task=await store.submit(input);queueMicrotask(kick);return view(task);
   }
   async function drain() {
-    accepting=false;clearInterval(timer);
+    accepting=false;clearInterval(timer);const notificationsStopped=notifier?.drain();
     await Promise.allSettled([...submissions]);await worker;
     // No new admissions or worker can start now. Complete the supervised worker,
     // then terminally cancel every accepted-but-unstarted task (including commits
     // that completed during drain), so a later daemon cannot launch them.
     for(;;){const queued=(await store.queue())[0];if(!queued)break;await store.cancel(queued.id);}
+    await notificationsStopped;
     return {active:children.size,unknown:(await store.unknowns()).map(t=>t.id)};
   }
   return {

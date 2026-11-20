@@ -1,0 +1,48 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+205 |     await until(async()=>h.notificationCalls(),calls=>calls.length===1);
+206 |     const old=readRegistration(h.state)!;expect((await h.call('status',[id])).value.data.notification.state).toBe('inflight');
+207 |     process.kill(old.pid,'SIGKILL');await until(async()=>alive(old.pid),v=>!v,3000);
+208 |     const sender=h.notificationCalls()[0]!.pid;if(alive(sender)){process.kill(sender,'SIGKILL');await until(async()=>alive(sender),v=>!v,3000);}
+209 |     const restarted=await h.call('status',[id]);expect(restarted.code,restarted.err).toBe(0);
+210 |     expect(restarted.value.data).toMatchObject({state:'succeeded',notification:{state:'unknown',attempts:1,needs_reconciliation:true,last_code:'INTERRUPTED_SEND'}});
+                                       ^
+error: expect(received).toMatchObject(expected)
+
+  {
++   "created_at": 1795178971390,
++   "error_code": null,
++   "exit_code": 0,
++   "id": "df3a4836-1a42-4aef-81f4-5085f188db79",
+    "notification": {
+      "attempts": 1,
+-     "last_code": "INTERRUPTED_SEND",
+-     "needs_reconciliation": true,
+-     "state": "unknown",
++     "event_id": "df3a4836-1a42-4aef-81f4-5085f188db79:terminal:1",
++     "last_code": null,
++     "message_id": "c128e9d3-9c97-484e-a457-11d92f825233",
++     "needs_reconciliation": false,
++     "receipt": null,
++     "state": "inflight",
++     "transport": "gbc",
+    },
++   "pid": 701664,
++   "request_id": "notice-crash",
+    "state": "succeeded",
++   "updated_at": 1795178971403,
+  }
+
+- Expected  - 3
++ Received  + 14
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:210:34)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: gbc notification daemon crash recovers inflight as unknown without replay [1255.26ms]
+
+ 0 pass
+ 37 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [1367.00ms]

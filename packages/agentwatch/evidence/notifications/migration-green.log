@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [36.90ms]
+(pass) future migration versions fail closed rather than rewriting schema [8.85ms]
+(pass) notification migration preserves legacy pending and never invents durable delivery [10.76ms]
+
+ 3 pass
+ 16 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 3 tests across 1 file. [201.00ms]

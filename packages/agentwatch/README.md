@@ -1,4 +1,4 @@
-# agentwatch task core — first implementation slice
+# agentwatch task core — external gbc adapters
 
 This is modular implementation code, not another generic PoC. It is **not yet a
 production runner**. 生产身份门闩通过独立安装的 `gbc`（`npm-v0.7.0`
@@ -43,9 +43,9 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
   message}}` JSON line on stderr, with no raw args, stack, IPC token or app secrets.
   Explicit --help / --version remain human help output. Interactive --wizard and
   unrelated built-in flags are disabled, rather than waiting for bot input.
-- Status/returned tasks show notification state and `transport:not_configured`;
-  a terminal outbox row is only pending, not a delivery receipt. Wait success only
-  describes process termination, never vendor business/permission success.
+- Status/wait expose task state and independent notification state. Wait completes
+  on task termination, not on notification acceptance. A successful wait never
+  proves vendor business/permission success or durable bot inbox delivery.
 - logs defaults to 4096 bytes, max 65536, using byte offset/next_offset. data_base64
   preserves bytes across UTF-8 boundaries; text is a preview and may split a code
   point. Raw private files are not retained/truncated by a disk-quota policy yet.
@@ -86,16 +86,84 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
    成功复用 request-id 返回历史任务的幂等语义不变，不会因此重启任务。
 6. 内部 health：可定位 gbc 为 `bot_verifier:gbc`，否则 `not_configured`；
    这里只反映适配器可用性，不等于凭据有效或 bot 有权限。只有独立 testhost 才报
-   `test_only`。`notification_transport` 仍是 `not_configured`。
+   `test_only`。生产 `notification_transport` 同样只反映 gbc 可定位性；testhost 未配置发送。
 
 契约依据：[npm-v0.7.0 README](https://github.com/younglark/grokbot-control/blob/npm-v0.7.0/README.md)、
 `dist/cli/{main,io,config}.js`、`dist/{errors,dto/result,ops/bot}.js`、
 `dist/connect/client.js`、`dist/auth/provider.js`。
 这是用户选定的非官方逆向控制面，**不是官方公开 API**。本轮没有 live 登录、
 OAuth 刷新、真实 bot / 团队绑定或四家 CLI E2E 验证；不因 mock 测试通过而声称已验证。
-通知 transport 已获准在后续实现，但本轮未做。二进制只含 agentwatch 本体与现有依赖，
+通知 transport 的当前实现与界限见下节。二进制只含 agentwatch 本体与现有依赖，
 不打包 gbc/Node；测试的 mock gbc 和 claude 是 `/bin/sh` 内建命令 stand-in，
 PATH 仅含每例私有 mock 目录，无系统工具链泄入。
+
+## 通知：持久 outbox + 外部 gbc（仅 mock 验收）
+
+任务终态与稳定 `event_id = task_id:terminal:1` 在同一事务落盘。通知 worker 独立于
+执行 worker；通知失败不改变任务 succeeded/failed/cancelled/unknown，也不改变 wait
+的任务退出语义。status/wait 的 `notification` 显示状态、event_id、message_id、
+attempts、next_attempt_at、reconciliation_attempts、last_code、receipt、
+needs_reconciliation 与 `durability:unverified`。
+
+| 通知状态 | 只说明什么 |
+|---|---|
+| pending | 未发送；可能无 gbc，或有明确未 dispatch 的可重试证据、正在退避 |
+| inflight | 已持久 claim，外部写可能进行中；不意味着已接受 |
+| accepted | gbc 的已知接受路径／duplicate，或只读 send status 报 accepted；不是已读、持久入箱或任务业务成功 |
+| rejected | 明确 delivery=refused，或只读 send status 报 rejected；不重发 |
+| not_dispatched | 合法 known_failure 明确 rpc_dispatched=false；非重试错误或三次预算已用完 |
+| unknown | 可能已写，必须对账；不能自动重发。needs_reconciliation=true |
+
+### 发什么、怎么发
+
+只调用已经核对 `npm-v0.7.0` 的 CLI：
+
+```text
+gbc --json --allow-writes message send --agent-id=BOT --message-id=MESSAGE_ID --text-stdin
+gbc --json message status --agent-id=BOT --message-id=MESSAGE_ID
+```
+
+正文从 stdin 传一行已冻结的有界 JSON：version、event_id、task_id、state、exit_code、
+error_code。error_code 仅本体白名单，正文不含 argv、cwd、request_id、stdout/stderr、
+原始异常、token 或报告文件内容。本轮不采集 AGENTWATCH_REPORT_FILE，不做总结。
+message_id 在首次 claim 事务内生成并持久化；稳定 ID 供关联/对账，不是远端去重证明。
+不传 session-id、不猜默认会话或 team id；gbc 返回的 default_unreported 也不是服务端
+确认的 session ID。发往任务已记录的目标 bot，不新建 bot，不重跑源任务。
+
+接收必须匹配 agent_id/message_id、非 simulated、合法封套/退出码和已核枚举对：
+accepted_box/1、accepted_temporal/2、duplicate/3；refused/4 明确拒绝。
+receipt 只保留 delivery/dispatched/workflow_id 等白名单字段，或 send status 的
+status/status_code/echo_entry_id/rejection_code/accepted_at_ms。过长或明显凭据形态的
+标识符置 null，未截短后冒充原始回执；拒绝原因原文、notes、额外响应字段不回显。
+这不是完整原始 HTTP 回执。dispatched 是消息工作流字段，**不等于 RPC 未发送证据**。
+
+### 重试、崩溃与对账
+
+- 唯一可自动重试路径：失败封套 known_failure、无 data、显式
+  error.details.rpc_dispatched=false、retryable=true、gbc exit 8。最多三次
+  （总尝试数），间隔 250ms/500ms，持久化下一次时间；重启不重置预算。
+- 超时、进程崩溃、响应丢失/坏 JSON、超限、unknown、模拟响应、身份不匹配或可能已
+  dispatch，一律 unknown，不自动重放写。即使 error 自称 retryable 也不能绕过此规则。
+- 发送前先提交 inflight；重启把 inflight 改 unknown。accepted、rejected、unknown、
+  not_dispatched 均不会被当作 pending 重发。旧 delivered 布尔列保留但不复用含义：
+  迁移 002 把旧 0 保留 pending，旧非 0 记 unknown/LEGACY_DELIVERY_UNVERIFIED；
+  没有伪造 message_id 或 accepted。001 checksum 不改，未知迁移仍拒绝。
+- 有 message_id 的 unknown 最多做一次自动只读 message status（持久记录尝试）。
+  accepted/2 或 rejected/3 可更新接受路径分类；not_found、pending、unknown_durability、
+  查询失败/超时/不匹配都仍 unknown，**从不因查不到就补发**。历史布尔标记无 message_id
+  则无法自动查。未抓取 history/transcript，避免无关内容读取和模糊匹配。
+- 自动查询可能早于服务端最终可见性；本轮没有后续手工「重新对账/覆盖结论」命令。
+  status 持续展示未知与稳定 message_id；操作者可独立运行上面的只读 gbc status，
+  但该外部查询不会自动回写本地账本。这是刻意保守的剩余缺口，不是持久 ACK 证明。
+
+gbc 子进程 stdin 关闭，无 shell；每次超时 3 秒、stdout/stderr 各限 1 MiB，异常与
+原始两路输出不转发。drain 停止新领取，杀掉当前 gbc 进程并观察 close、持久化未知，
+不无限等待网络；尚未发送的 pending 保留。没有 gbc 时不 claim，不丢 outbox；以后
+可定位到 gbc 再处理 pending。进程树取消与恶意同 UID 程序仍不是本轮保证。
+
+本轮只在临时 HOME/PATH 的 mock gbc 上验证；没有真实发送、登录、读取真实 ~/.gbc、
+后端请求、OAuth 刷新或四家 E2E。服务端稳定 ID 去重与持久入箱 ACK 仍未证明，
+不承诺 exactly-once，也不把 accepted_box 的名字当持久性证明。
 
 ## Service and storage boundaries
 
@@ -126,7 +194,7 @@ watchdog and a full contender retry pool are not in this slice.
 
 ## Explicit remaining gates
 
-Live gbc identity/target verification, notification transport/ACK/retries, four-vendor E2E,
+Live gbc identity/target/send verification, durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
 production process-tree cancellation (.cmd / Windows included), redaction policy
 for potentially sensitive native output, disk retention, upgrades/distribution,
 and full multi-user/Windows ACL hardening remain unfinished. No production

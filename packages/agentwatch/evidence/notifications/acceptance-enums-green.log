@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: gbc notification preserves accepted_box as acceptance evidence only [739.84ms]
+(pass) source CLI: gbc notification preserves duplicate as acceptance evidence only [706.91ms]
+
+ 2 pass
+ 39 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 2 tests across 1 file. [1.56s]
