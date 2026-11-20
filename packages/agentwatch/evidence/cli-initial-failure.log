@@ -1,0 +1,127 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [29.89ms]
+(pass) core executes fixture once, preserves argv, and wait timeout never cancels [186.19ms]
+(pass) cancel at deterministic beforeClaim barrier prevents any process launch [11.70ms]
+(pass) cancel at deterministic beforeLaunch barrier prevents any process launch [9.02ms]
+(pass) recover lost supervision as unknown without replay; drain ignores historical unknown [9.86ms]
+(pass) authorization is checked again before launch; revocation never starts a child [25.00ms]
+(pass) log reads enforce byte offsets/default and maximum bounds [177.68ms]
+
+test/cli.test.ts:
+(pass) authenticated loopback protocol isolates states and runs a fixture through the real ledger [188.90ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch status [flags] <task-id>
+
+ARGUMENTS
+  task-id string
+
+FLAGS
+  --state string
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+(fail) source CLI: five JSON commands preserve native argv and timeout never cancels [3548.34ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch run [flags]
+
+FLAGS
+  --state string
+  --json
+  --bot st
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:28:30)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:8:52)
+(fail) source CLI: concurrent same ID returns one fixture process; changed argv conflicts [368.09ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch run [flags]
+
+FLAGS
+  --state string
+  --json
+  --bot st
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:37:23)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:8:52)
+(fail) source CLI: unconfigured production verifier is visible and cannot be bypassed [175.76ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch run [flags]
+
+FLAGS
+  --state string
+  --json
+  --bot st
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:47:28)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:8:52)
+(fail) source CLI: bot denial, program allowlist and malformed requests fail without stdout or spawn [345.21ms]
+(pass) source CLI: private registration rejects wrong credentials/scope and unsafe permissions [167.72ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch run [flags]
+
+FLAGS
+  --state string
+  --json
+  --bot st
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:65:23)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:8:52)
+(fail) source CLI: crash releases ownership, recovers unknown without replay and does not block drain [354.65ms]
+21 |     },(r):r is Registration=>!!r);
+22 |   }
+23 |   async function call(action:string,args:string[]=[]) {
+24 |     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+25 |     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
+26 |     let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+                                                                         ^
+error: stdout is not one JSON value: USAGE
+  agentwatch status [flags] <task-id>
+
+ARGUMENTS
+  task-id string
+
+FLAGS
+  --state string
+      at call (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-harness.ts:26:69)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:75:34)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:8:52)
+(fail) source CLI: concurrent production CLI ensure elects one compatible daemon [211.05ms]
+
+ 9 pass
+ 6 fail
+ 44 expect() calls
+Ran 15 tests across 2 files. [5.91s]

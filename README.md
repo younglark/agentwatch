@@ -1,5 +1,11 @@
 # agentwatch
 
+> **新架构首批实现：** 见 [packages/agentwatch](packages/agentwatch/README.md) 和
+> [OpenCode v2 源码实施映射](docs/task-core-opencode-map.md)。Bun 任务核心与五命令
+> 已独立实现，但生产 bot verifier 尚未接通，真实 run 明确拒绝启动。本文件下面
+> 是旧 auth/RPC PoC 的历史说明；不是新架构的生产入口。
+
+
 包装一条非交互命令，并在它结束、失败或超时后，向指定的 Grok Bot 发送恰好一条通知。
 
 这不是官方产品。协议与凭据格式都来自对官方 Grok Bot 桌面应用（基线约 0.79.4）和 Cursor 登录流程的观察，应用更新后可能需要跟进。

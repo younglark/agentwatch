@@ -1,0 +1,51 @@
+$ bun run typecheck && bun test test/source.test.ts && bun run build && bun test test/compiled.test.ts
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+bun test v1.4.4 (38afee6c8)
+
+test/source.test.ts:
+STRICT_STOP_ACCEPTED_WITHOUT_FALLBACK
+(pass) source: strict stop exits daemon and active fake without cleanup fallback [840.11ms]
+(pass) source: eight concurrent CLIs elect exactly one daemon and SQLite migration is embedded [1230.15ms]
+(pass) source: schema rejects invalid fake input without a spawn [980.49ms]
+(pass) source: concurrent duplicates and dropped response reuse one task, conflicting payload fails [1631.35ms]
+(pass) source: failure exit code and separate multi-megabyte stdout/stderr remain complete [1734.52ms]
+(pass) source: CLI exits while fake continues; wait timeout does not cancel; running cancel confirms exit [1906.14ms]
+CANCEL_BARRIER_VERIFIED phase=claim completed=true launches=0 child_receipts=0
+(pass) source: deterministic claim cancellation cannot launch after acknowledgement [2525.04ms]
+CANCEL_BARRIER_VERIFIED phase=launch completed=true launches=0 child_receipts=0
+(pass) source: deterministic launch cancellation cannot launch after acknowledgement [2464.50ms]
+(pass) source: launch/cancel boundary produces only confirmed cancellation, at most one spawn [2974.63ms]
+(pass) source: crash during starting becomes unknown without spawn; historical unknown does not block new work [2414.17ms]
+SAFETY_CLEANUP_NOT_STOP_SUCCESS {"stopExit":0,"forcedPids":[563660]}
+(pass) source: hard crash recovers running as unknown, preserves outbox, never replays; fake retry does not respawn [4036.08ms]
+
+ 11 pass
+ 0 fail
+ 193 expect() calls
+Ran 11 tests across 1 file. [22.74s]
+$ bun build --compile --define SPIKE_COMPILED=true ./src/main.ts --outfile ./dist/spike
+  [42ms]  bundle  395 modules
+ [302ms] compile  ./dist/spike
+bun test v1.4.4 (38afee6c8)
+
+test/compiled.test.ts:
+STRICT_STOP_ACCEPTED_WITHOUT_FALLBACK
+(pass) compiled PATH/source-isolated: strict stop exits daemon and active fake without cleanup fallback [411.26ms]
+(pass) compiled PATH/source-isolated: eight concurrent CLIs elect exactly one daemon and SQLite migration is embedded [400.49ms]
+(pass) compiled PATH/source-isolated: schema rejects invalid fake input without a spawn [388.24ms]
+(pass) compiled PATH/source-isolated: concurrent duplicates and dropped response reuse one task, conflicting payload fails [595.51ms]
+(pass) compiled PATH/source-isolated: failure exit code and separate multi-megabyte stdout/stderr remain complete [741.56ms]
+(pass) compiled PATH/source-isolated: CLI exits while fake continues; wait timeout does not cancel; running cancel confirms exit [742.92ms]
+CANCEL_BARRIER_VERIFIED phase=claim completed=true launches=0 child_receipts=0
+(pass) compiled PATH/source-isolated: deterministic claim cancellation cannot launch after acknowledgement [1163.71ms]
+CANCEL_BARRIER_VERIFIED phase=launch completed=true launches=0 child_receipts=0
+(pass) compiled PATH/source-isolated: deterministic launch cancellation cannot launch after acknowledgement [886.37ms]
+(pass) compiled PATH/source-isolated: launch/cancel boundary produces only confirmed cancellation, at most one spawn [1088.22ms]
+(pass) compiled PATH/source-isolated: crash during starting becomes unknown without spawn; historical unknown does not block new work [986.61ms]
+SAFETY_CLEANUP_NOT_STOP_SUCCESS {"stopExit":0,"forcedPids":[564849]}
+(pass) compiled PATH/source-isolated: hard crash recovers running as unknown, preserves outbox, never replays; fake retry does not respawn [2140.38ms]
+
+ 11 pass
+ 0 fail
+ 194 expect() calls
+Ran 11 tests across 1 file. [9.62s]
