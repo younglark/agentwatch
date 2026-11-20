@@ -1,0 +1,11 @@
+{
+  "remaining_matching_owned_processes": [],
+  "hung_runner_pid": 590330,
+  "hung_runner_still_exists": false,
+  "hung_owned_dirs_exist": {
+    "/tmp/aw-pre-admit-x11TdL": false
+  },
+  "formal_source_restored": true,
+  "formal_hidden_source_exists": false,
+  "spike_source_restored": true
+}

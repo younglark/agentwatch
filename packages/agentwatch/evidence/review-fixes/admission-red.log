@@ -1,0 +1,24 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+123 |     const submission=engine.run(input);await barrier.reached;
+124 |     const stopping=engine.drain();barrier.release();const task=await submission;await stopping;
+125 |     restarted=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:(value,files)=>{if(value.request_id===input.request_id)lateLaunches++;return fixtureExecutor(value,files);}});
+126 |     const marker=await restarted.run({...input,request_id:'restart-marker'});
+127 |     expect((await restarted.wait(marker.id,5000)).task.state).toBe('succeeded');
+128 |     expect(lateLaunches).toBe(0);
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:128:26)
+(fail) drain settles admitted submit commit and leaves no queued task to launch after restart [378.17ms]
+
+ 0 pass
+ 10 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [486.00ms]
+exit_code=1

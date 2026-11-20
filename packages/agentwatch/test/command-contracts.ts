@@ -1,8 +1,14 @@
+import { Database } from 'bun:sqlite';
 import { test,expect } from 'bun:test';
-import { readFileSync,writeFileSync,statSync,chmodSync } from 'node:fs';
+import { readFileSync,writeFileSync,statSync,chmodSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { commandHarness,until,alive } from './command-harness.ts';
 import { readRegistration,request } from '../src/service.ts';
+function ledgerRows(state:string,requestId:string) {
+  const db=new Database(join(state,'tasks.sqlite'),{readonly:true});
+  try{return db.query('SELECT id FROM tasks WHERE request_id=?').all(requestId);}
+  finally{db.close();}
+}
 export function commandContracts(label:string,cli:readonly string[],host:readonly string[],env?:NodeJS.ProcessEnv) {
   const check=(name:string,body:(h:ReturnType<typeof commandHarness>)=>Promise<void>)=>test(`${label}: ${name}`,async()=>{
     const h=commandHarness(cli,host,env);try{await body(h);}finally{await h.cleanup();}
@@ -37,20 +43,37 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const run=await h.call('run',['--bot','test-bot','--request-id','no-auth','--cwd',h.cwd,'--','opencode','run','hi']);
     expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('AUTH_NOT_CONFIGURED');
     const info=readRegistration(h.state)!;expect((await request(info,'health',{})).bot_verifier).toBe('not_configured');
-    expect(h.receipts()).toHaveLength(0);
+    expect(h.receipts()).toHaveLength(0);expect(ledgerRows(h.state,'no-auth')).toHaveLength(0);
     await expect(request(info,'run',{request_id:'forged-test-adapter',bot:'test-bot',cwd:h.cwd,argv:['claude'],testOnly:true,verifier:'fake'})).rejects.toMatchObject({code:'AUTH_NOT_CONFIGURED'});
+    expect(ledgerRows(h.state,'forged-test-adapter')).toHaveLength(0);
     const bypass=await h.call('run',['--fake-verifier','--bot','test-bot','--request-id','bypass','--','claude']);
-    expect(bypass.code).toBe(2);expect(bypass.out).toBe('');
+    expect(bypass.code).toBe(2);expect(bypass.out).toBe('');expect(ledgerRows(h.state,'bypass')).toHaveLength(0);
     const wizard=await h.call('run',['--wizard']);expect(wizard.code).toBe(2);expect(wizard.out).toBe('');expect(JSON.parse(wizard.err).error.code).toBe('USAGE');
     expect(run.err).not.toContain(info.token);
   });
   check('bot denial, program allowlist and malformed requests fail without stdout or spawn',async h=>{
     await h.startHost();
     const rejected=await h.call('run',['--bot','forbidden','--request-id','denied','--cwd',h.cwd,'--','grok','-p','hi']);
-    expect(rejected.code).toBe(5);expect(rejected.out).toBe('');expect(h.receipts()).toHaveLength(0);
-    const arbitrary=await h.call('run',['--bot','test-bot','--request-id','shell','--','sh','-c','echo hi']);expect(arbitrary.code).toBe(2);
+    expect(rejected.code).toBe(5);expect(rejected.out).toBe('');expect(h.receipts()).toHaveLength(0);expect(ledgerRows(h.state,'denied')).toHaveLength(0);
+    const arbitrary=await h.call('run',['--bot','test-bot','--request-id','shell','--','sh','-c','echo hi']);expect(arbitrary.code).toBe(2);expect(ledgerRows(h.state,'shell')).toHaveLength(0);
     const missing=await h.call('status',['no-such-task']);expect(missing.code).toBe(3);expect(missing.out).toBe('');
     expect(JSON.parse(missing.err).version).toBe(1);
+  });
+  check('IPC log reads reject replaced links, nonregular files and ledger traversal',async h=>{
+    await h.startHost();
+    const run=await h.call('run',['--bot','test-bot','--request-id','log-links','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+    expect((await h.call('wait',[id,'--timeout','5'])).code).toBe(0);
+    const sentinel=join(h.root,'outside.stdout');writeFileSync(sentinel,'OWNED_PRIVATE_SENTINEL',{mode:0o600});
+    for(const stream of ['stdout','stderr']) {
+      const file=join(h.state,id+'.'+stream);unlinkSync(file);symlinkSync(sentinel,file);
+      const result=await h.call('logs',[id,'--stream',stream]);expect(result.code).toBe(7);expect(result.out).toBe('');expect(result.err).not.toContain('OWNED_PRIVATE_SENTINEL');
+    }
+    unlinkSync(join(h.state,id+'.stdout'));mkdirSync(join(h.state,id+'.stdout'));
+    expect((await h.call('logs',[id])).code).toBe(7);
+    const raw=new Database(join(h.state,'tasks.sqlite'));
+    try{raw.query('UPDATE tasks SET id=? WHERE id=?').run('../outside',id);}finally{raw.close();}
+    const traversal=await h.call('logs',['../outside']);expect(traversal.code).toBe(7);expect(traversal.out).toBe('');
   });
   check('private registration rejects wrong credentials/scope and unsafe permissions',async h=>{
     const info=(await h.startHost())!;

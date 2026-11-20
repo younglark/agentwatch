@@ -1,0 +1,29 @@
+Recorded Asia/Shanghai: 2026-11-20T18:10:04+08:00
+Base: cb8fa40330dfdbddbfb028901e46d90a957ef729
+OS: Linux 6.12.113+ x86_64 GNU/Linux
+Bun: 1.4.4
+Compiler: Version 6.0.3
+
+Artifacts
+dist/agentwatch 109942960 bytes
+dist/test-host 109631664 bytes
+fddc3455754965f89805c9f3d1b573c1703f12097a5655e13f6bc58d50c7ff6c  dist/agentwatch
+bc0225b5836d1b44aab920ef57dc4c3a80d94cb7a1b2b80cd594be21146d80a1  dist/test-host
+
+Pinned dependencies unchanged
+{
+  "dependencies": {
+    "effect": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/sql-sqlite-bun": "4.1.0",
+    "drizzle-orm": "1.0.0-rc.5-169397b"
+  },
+  "devDependencies": {
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@types/bun": "1.4.4"
+  },
+  "overrides": {
+    "@effect/platform-node-shared": "4.1.0",
+    "@types/node": "24.12.2"
+  }
+}

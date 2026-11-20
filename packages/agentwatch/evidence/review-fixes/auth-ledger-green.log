@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: unconfigured production verifier is visible and cannot be bypassed [801.30ms]
+(pass) source CLI: bot denial, program allowlist and malformed requests fail without stdout or spawn [701.33ms]
+
+ 2 pass
+ 7 filtered out
+ 0 fail
+ 24 expect() calls
+Ran 2 tests across 1 file. [1.61s]
+exit_code=0

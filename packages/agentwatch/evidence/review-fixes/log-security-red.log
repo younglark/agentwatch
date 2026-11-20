@@ -1,0 +1,37 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+154 |   await engine.drain();const raw=new Database(join(state,'tasks.sqlite'));
+155 |   try {
+156 |     const task=await db.store.submit({request_id:'unsafe-log',bot:'test',cwd:state,argv:['claude']});
+157 |     const sentinel=join(root,'outside.stdout');writeFileSync(sentinel,'OWNED_SENTINEL_NOT_A_LOG',{mode:0o600});
+158 |     const file=join(state,task.id+'.stdout');symlinkSync(sentinel,file);
+159 |     await expect(engine.logs(task.id)).rejects.toMatchObject({code:'IPC_AUTH'});
+                                                     ^
+error: expect(received).rejects.toMatchObject(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:159:48)
+(fail) logs reject symlink/nonregular files and traversal IDs from a tampered ledger [33.16ms]
+172 |       const id=randomUUID(),sentinel=join(state,'sentinel-'+stream);writeFileSync(sentinel,'UNCHANGED',{mode:0o600});
+173 |       const files={stdout:join(state,id+'.stdout'),stderr:join(state,id+'.stderr')};symlinkSync(sentinel,files[stream as 'stdout'|'stderr']);
+174 |       let child:ReturnType<typeof fixtureExecutor>|undefined,error:any;
+175 |       try{child=fixtureExecutor({request_id:'unsafe-write-'+stream,bot:'test',cwd:state,argv:['claude']},files);}catch(e){error=e;}
+176 |       if(child)await child.exited;
+177 |       expect(error).toMatchObject({code:'IPC_AUTH'});expect(readFileSync(sentinel,'utf8')).toBe('UNCHANGED');
+                          ^
+error: expect(received).toMatchObject(expected)
+
+Matcher error: received value must be a non-null object
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:177:21)
+(fail) spawn log writers reject stdout and stderr symlinks without touching owned sentinel [160.70ms]
+
+ 0 pass
+ 12 filtered out
+ 2 fail
+ 1 expect() calls
+Ran 2 tests across 1 file. [293.00ms]
+exit_code=1

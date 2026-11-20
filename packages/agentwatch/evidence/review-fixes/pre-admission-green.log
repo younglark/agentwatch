@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) drain rejects a verifier-pending submission before admission without a ledger row [21.05ms]
+
+ 1 pass
+ 15 filtered out
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [123.00ms]

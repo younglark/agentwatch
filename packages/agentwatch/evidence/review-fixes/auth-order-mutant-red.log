@@ -1,0 +1,41 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+41 |   });
+42 |   check('unconfigured production verifier is visible and cannot be bypassed',async h=>{
+43 |     const run=await h.call('run',['--bot','test-bot','--request-id','no-auth','--cwd',h.cwd,'--','opencode','run','hi']);
+44 |     expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('AUTH_NOT_CONFIGURED');
+45 |     const info=readRegistration(h.state)!;expect((await request(info,'health',{})).bot_verifier).toBe('not_configured');
+46 |     expect(h.receipts()).toHaveLength(0);expect(ledgerRows(h.state,'no-auth')).toHaveLength(0);
+                                                                                    ^
+error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:46:80)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: unconfigured production verifier is visible and cannot be bypassed [432.02ms]
+52 |     expect(run.err).not.toContain(info.token);
+53 |   });
+54 |   check('bot denial, program allowlist and malformed requests fail without stdout or spawn',async h=>{
+55 |     await h.startHost();
+56 |     const rejected=await h.call('run',['--bot','forbidden','--request-id','denied','--cwd',h.cwd,'--','grok','-p','hi']);
+57 |     expect(rejected.code).toBe(5);expect(rejected.out).toBe('');expect(h.receipts()).toHaveLength(0);expect(ledgerRows(h.state,'denied')).toHaveLength(0);
+                                                                                                                                               ^
+error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:57:139)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: bot denial, program allowlist and malformed requests fail without stdout or spawn [350.46ms]
+
+ 0 pass
+ 7 filtered out
+ 2 fail
+ 10 expect() calls
+Ran 2 tests across 1 file. [875.00ms]
+
+exit_code=1

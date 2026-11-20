@@ -1,0 +1,13 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) log buffer allocation failure does not leave an opened descriptor [30.36ms]
+(pass) logs reject symlink/nonregular files and traversal IDs from a tampered ledger [12.64ms]
+(pass) spawn log writers reject stdout and stderr symlinks without touching owned sentinel [0.76ms]
+
+ 3 pass
+ 11 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 3 tests across 1 file. [143.00ms]
+exit_code=0

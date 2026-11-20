@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+ADMISSION_DRAIN_NO_LATE_LAUNCH
+(pass) drain settles admitted submit commit and leaves no queued task to launch after restart [209.43ms]
+
+ 1 pass
+ 10 filtered out
+ 0 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [337.00ms]
+exit_code=0

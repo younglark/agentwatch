@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) log directory replacement at open cannot redirect a pinned log read [34.75ms]
+
+ 1 pass
+ 14 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [139.00ms]
+exit_code=0

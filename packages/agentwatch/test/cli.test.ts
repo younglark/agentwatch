@@ -22,3 +22,13 @@ test('authenticated loopback protocol isolates states and runs a fixture through
 import { commandContracts } from './command-contracts.ts';
 import { resolve } from 'node:path';
 commandContracts('source CLI',[process.execPath,resolve('src/main.ts')],[process.execPath,resolve('test/host.ts')]);
+
+test('local protocol accepts only own domain error codes and rejects prototype names',async()=>{
+  const {exitCodes}=await import('../src/domain.ts');let code='INTERNAL';
+  const server=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>Response.json({version:1,ok:false,error:{code,message:'test error'}})});
+  const info={version:'0.1.0',protocol:1,instance:'test',scope:'test',pid:process.pid,port:server.port!,token:'synthetic-test-token'};
+  try {
+    for(code of Object.keys(exitCodes))await expect(request(info,'health',{})).rejects.toMatchObject({code});
+    for(code of ['constructor','toString','__proto__','FUTURE_UNRECOGNIZED'])await expect(request(info,'health',{})).rejects.toMatchObject({code:'INTERNAL'});
+  }finally{server.stop(true);}
+});

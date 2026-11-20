@@ -49,3 +49,18 @@ Bun / 四家普通 CLI / 通知实测搁置等决定。新实现位于 packages/
 不新增通用平台 PoC。本次实现的准确数量、矩阵和局限见
 packages/agentwatch/RESULTS.md；下面的继续工作须经过主线程审查，不能因参考了
 OpenCode 就把未实现项或未测平台标成通过。
+
+## t178 有界审查修复：采用依据与差异
+
+- 重新读取固定正式 SHA 的 [service-status.ts](https://github.com/anomalyco/opencode/blob/c0ad18b402eb2827fc1ee71c171b1177b3fc02d1/packages/server/src/service-status.ts#L19-L28)
+  和 [停止 finalizer](https://github.com/anomalyco/opencode/blob/c0ad18b402eb2827fc1ee71c171b1177b3fc02d1/packages/server/src/process.ts#L91-L97)、
+  [ready 准入 dispatch](https://github.com/anomalyco/opencode/blob/c0ad18b402eb2827fc1ee71c171b1177b3fc02d1/packages/server/src/process.ts#L194-L209)。
+  借鉴先进入 stopping 再释放 scope/路由的顺序。适配为 JS 同步准入检查 + 已登记提交 promise 集合；
+  正常 drain 等待已准入提交和当前 worker，再把剩余 queued 同事务终结为 cancelled，不能遗留重启晚启。
+  不声称 OpenCode 自身有相同任务队列/取消语义，也不搬 session 恢复引擎。
+- 日志 guard 是本项目安全适配：UUID/目录边界、Linux pinned-directory + procfs-relative no-follow、
+  fstat 同一 inode、读写共用；非 Linux 不提供此保证而失败关闭。不臆称它直接复制自 OpenCode。
+- 既有 CLI/Schema/SQLite/Drizzle 版本和身份 gate 不变；授权失败断言改为实际账本 request_id 无行，
+  不是仅凭 fixture receipts 判断。错误码复用 domain 自有键，不使用原型链 `in`。
+- 本轮只修 5 项已报告发现；取消/等待/unknown/outbox 既有契约保留，未增加产品命令或真实集成。
+  独立 Standards/Spec 复审待主线程；本 executor 仅完成自审与机械回归。

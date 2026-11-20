@@ -1,5 +1,5 @@
-import { openSync,readSync,closeSync,statSync,existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readSync,closeSync,fstatSync } from 'node:fs';
+import { taskLogFile,openLogFile } from './log-files.ts';
 import { CoreError,normalize,terminal,integer,type RunInput } from './domain.ts';
 import { publicTask,type Store,type TaskRecord } from './storage.ts';
 import { type Executor,type Verifier,type Child } from './process.ts';
@@ -27,7 +27,7 @@ export async function createTaskEngine(options:EngineOptions) {
       const request=normalize(JSON.parse(task.request));
       await verify(request); // Revalidate immediately before the atomic launch guard.
       const child=await store.launch(task.id,()=>{
-        const child=execute(request,{stdout:join(state,task.id+'.stdout'),stderr:join(state,task.id+'.stderr')});
+        const child=execute(request,{stdout:taskLogFile(state,task.id,'stdout'),stderr:taskLogFile(state,task.id,'stderr')});
         children.set(task.id,child);return child;
       });
       if(!child)return;
@@ -51,11 +51,17 @@ export async function createTaskEngine(options:EngineOptions) {
     if(!accepting)throw new CoreError('DRAINING','Daemon is draining');
     await verify(input);
     if(!accepting)throw new CoreError('DRAINING','Daemon is draining');
+    // Admission linearizes at the synchronous accepting check above. run() tracks
+    // this entire commit promise; drain must settle it before closing storage.
     const task=await store.submit(input);queueMicrotask(kick);return view(task);
   }
   async function drain() {
     accepting=false;clearInterval(timer);
     await Promise.allSettled([...submissions]);await worker;
+    // No new admissions or worker can start now. Complete the supervised worker,
+    // then terminally cancel every accepted-but-unstarted task (including commits
+    // that completed during drain), so a later daemon cannot launch them.
+    for(;;){const queued=(await store.queue())[0];if(!queued)break;await store.cancel(queued.id);}
     return {active:children.size,unknown:(await store.unknowns()).map(t=>t.id)};
   }
   return {
@@ -80,12 +86,14 @@ export async function createTaskEngine(options:EngineOptions) {
     async logs(id:string,stream='stdout',offset=0,limit=4096) {
       const task=await store.get(id);integer(offset,'offset',Number.MAX_SAFE_INTEGER);integer(limit,'limit',65536);
       if(!['stdout','stderr'].includes(stream))throw new CoreError('USAGE','Unknown log stream');
-      const file=join(state,task.id+'.'+stream);
-      if(!existsSync(file))return {stream,offset,next_offset:offset,bytes:0,truncated:false,data_base64:'',text:''};
-      const size=statSync(file).size;if(offset>size)throw new CoreError('USAGE','Offset exceeds log size');
-      const fd=openSync(file,'r'),data=Buffer.alloc(Math.min(limit,size-offset));
-      let bytes:number;try{bytes=readSync(fd,data,0,data.length,offset);}finally{closeSync(fd);}
-      return {stream,offset,next_offset:offset+bytes,bytes,truncated:offset+bytes<size,data_base64:data.subarray(0,bytes).toString('base64'),text:data.subarray(0,bytes).toString('utf8')};
+      const file=taskLogFile(state,task.id,stream),data=Buffer.alloc(limit);
+      const fd=openLogFile(file,'read');
+      if(fd===undefined)return {stream,offset,next_offset:offset,bytes:0,truncated:false,data_base64:'',text:''};
+      try {
+        const size=fstatSync(fd).size;if(offset>size)throw new CoreError('USAGE','Offset exceeds log size');
+        const bytes=readSync(fd,data,0,Math.min(data.length,size-offset),offset);
+        return {stream,offset,next_offset:offset+bytes,bytes,truncated:offset+bytes<size,data_base64:data.subarray(0,bytes).toString('base64'),text:data.subarray(0,bytes).toString('utf8')};
+      }finally{closeSync(fd);}
     },
     drain,
     async close() {accepting=false;clearInterval(timer);for(const child of children.values())child.cancel();await drain();},

@@ -4,7 +4,7 @@ import { mkdirSync,realpathSync,lstatSync,writeFileSync,renameSync,readFileSync,
 import { join } from 'node:path';
 import { randomBytes,randomUUID,createHash,timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { CoreError,failure,PROTOCOL,integer } from './domain.ts';
+import { CoreError,failure,PROTOCOL,integer,exitCodes } from './domain.ts';
 import { openStorage } from './storage.ts';
 import { createTaskEngine } from './engine.ts';
 import { nativeExecutor,type Executor,type Verifier } from './process.ts';
@@ -43,8 +43,7 @@ export async function request(info:Registration,operation:string,data:unknown):P
   let body:any;try{const text=await response.text();if(text.length>1048576)throw new Error();body=JSON.parse(text);}catch{throw new CoreError('TRANSPORT_NOT_CONFIGURED','Invalid local service response');}
   if(!body.ok) {
     const code=body.error?.code;if(typeof code!=='string')throw new CoreError('TRANSPORT_NOT_CONFIGURED','Invalid local error response');
-    const known=['INTERNAL','USAGE','NOT_FOUND','AUTH_NOT_CONFIGURED','BOT_FORBIDDEN','CONFLICT','IPC_AUTH','TRANSPORT_NOT_CONFIGURED','WAIT_TIMEOUT','UNKNOWN','DRAINING','VERSION_MISMATCH'];
-    throw new CoreError(known.includes(code)?code as CoreError['code']:'INTERNAL',typeof body.error.message==='string'?body.error.message:'Local service failed');
+    throw new CoreError(Object.hasOwn(exitCodes,code)?code as keyof typeof exitCodes:'INTERNAL',typeof body.error.message==='string'?body.error.message:'Local service failed');
   }
   if(body.version!==PROTOCOL)throw new CoreError('VERSION_MISMATCH','Local protocol mismatch');
   return body.data;

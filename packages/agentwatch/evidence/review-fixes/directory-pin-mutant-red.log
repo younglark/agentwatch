@@ -1,0 +1,25 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+189 |   let swapped=false;const open=fs.openSync;
+190 |   const fault=spyOn(fs,'openSync').mockImplementation(((path:any,...args:any[])=>{
+191 |     if(!swapped&&String(path).endsWith('/'+task.id+'.stdout')){fs.renameSync(state,pinned);symlinkSync(outside,state);swapped=true;}
+192 |     return (open as any)(path,...args);
+193 |   }) as any);
+194 |   try{expect((await engine.logs(task.id)).text).toBe('OWNED_LOG');expect(swapped).toBe(true);}
+                                                      ^
+error: expect(received).toBe(expected)
+
+Expected: "OWNED_LOG"
+Received: "OUTSIDE_SENTINEL"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:194:49)
+(fail) log directory replacement at open cannot redirect a pinned log read [32.10ms]
+
+ 0 pass
+ 14 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [129.00ms]
+
+exit_code=1

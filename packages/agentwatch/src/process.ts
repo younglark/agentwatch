@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { openSync,closeSync } from 'node:fs';
+import { closeSync } from 'node:fs';
+import { openLogFile } from './log-files.ts';
 import { type RunInput,normalize } from './domain.ts';
 export interface Child {
   pid:number;
@@ -10,9 +11,9 @@ export type Executor=(input:RunInput,files:{stdout:string;stderr:string})=>Child
 export type Verifier=(input:RunInput)=>Promise<void>;
 // No shell and no session/resume interpretation. Production remains verifier-gated.
 export function spawnArgv(command:readonly string[],cwd:string,files:{stdout:string;stderr:string}):Child {
-  const out=openSync(files.stdout,'a',0o600);let err:number|undefined;
+  const out=openLogFile(files.stdout,'append');let err:number|undefined;
   try {
-    err=openSync(files.stderr,'a',0o600);
+    err=openLogFile(files.stderr,'append');
     const child=spawn(command[0]!,command.slice(1),{cwd,stdio:['ignore',out,err],windowsHide:true});
     const exited=new Promise<number|null>((ok,fail)=>{child.once('error',fail);child.once('close',code=>ok(code));});
     if(!child.pid){void exited.catch(()=>{});throw new Error('Process could not be started');}

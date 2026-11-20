@@ -1,0 +1,26 @@
+$ bun run typecheck && bun run test && bun run build && bun run build:test-host && bun test test/compiled.test.ts
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+$ bun test test/core.test.ts test/cli.test.ts
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [28.29ms]
+(pass) core executes fixture once, preserves argv, and wait timeout never cancels [186.91ms]
+(pass) cancel at deterministic beforeClaim barrier prevents any process launch [9.58ms]
+(pass) cancel at deterministic beforeLaunch barrier prevents any process launch [9.77ms]
+(pass) recover lost supervision as unknown without replay; drain ignores historical unknown [10.94ms]
+(pass) authorization is checked again before launch; revocation never starts a child [23.56ms]
+(pass) log reads enforce byte offsets/default and maximum bounds [178.62ms]
+(pass) outbox insertion failure rolls back terminal state [10.44ms]
+(pass) future migration versions fail closed rather than rewriting schema [5.84ms]
+(pass) spawn ENOENT is failed with no PID, not an ambiguous running task [26.28ms]
+ADMISSION_DRAIN_NO_LATE_LAUNCH
+(pass) drain settles admitted submit commit and leaves no queued task to launch after restart [187.97ms]
+(pass) log buffer allocation failure does not leave an opened descriptor [18.90ms]
+(pass) logs reject symlink/nonregular files and traversal IDs from a tampered ledger [18.29ms]
+(pass) spawn log writers reject stdout and stderr symlinks without touching owned sentinel [0.61ms]
+(pass) log directory replacement at open cannot redirect a pinned log read [13.18ms]
+Killed
+error: script "test" exited with code 137
+error: script "verify" exited with code 137
+exit_code=137

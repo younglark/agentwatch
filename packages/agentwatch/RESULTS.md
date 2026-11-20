@@ -1,4 +1,55 @@
-# Task-core first slice — measured results
+# t178 review-fix results — current
+
+2026-11-20, Asia/Shanghai. Fixed base: `cb8fa40330dfdbddbfb028901e46d90a957ef729`.
+Scope is only the five reviewed findings; original implementation/experiment
+measurements are retained below as historical evidence, not current test counts.
+
+| Finding | Resolution and evidence in `evidence/review-fixes/` |
+|---|---|
+| Admission/drain commit window | `admission-red.log`: original code launches 1 old task after restart (expected 0), exit 1. `admission-green.log`: 0 late launches. Drain closes admission synchronously, settles admitted commits/current worker, cancels all remaining queued + outbox before returning. Verifier-pending/pre-admission requests leave no row. |
+| Unsafe log read/write/ID and directory race | `log-security-red.log` catches original symlink reads/writes; `log-security-green.log` passes. UUID identity validation, descriptor-pinned Linux directory, final no-follow open, same-inode fstat/read/append. IPC suite covers both streams, nonregular files and tampered traversal ID. `directory-pin-mutant-red.log` returns OUTSIDE_SENTINEL after deliberately removing directory-relative opening; restored code passes. All sentinels are synthetic task-owned files. |
+| Auth negative tests did not prove no insert | Read-only ledger queries assert no rows for rejected request IDs (unconfigured, forged fake adapter, forbidden bot, rejected program/flag). `auth-order-mutant-red.log`: moving verify after insert makes both relevant tests fail with row count 1 despite correct auth error/zero fixture receipts. Original verify order restored; green log passes. Pre-launch verifier retained during mutation, so no real Agent can execute. |
+| Allocation before try leaked read FD | `allocation-red.log` catches one leaked descriptor on injected Buffer.alloc failure; green allocates bounded memory before open. Test restores allocator and closes only its own leaked descriptor on the red run. |
+| Duplicate error code list | service reuses domain.exitCodes with Object.hasOwn; protocol tests cover every own code plus constructor/toString/__proto__/unknown. This is a refactor: baseline and changed behavior both green, not a fabricated original red failure. |
+
+## Full final verification
+
+Reproduce unchanged: `bun install --frozen-lockfile && bun run verify` in this package.
+`bun run verify` and original experiment `bun run verify` both exit **0**.
+
+| Actual suite | Pass/fail | Assertions | Time |
+|---|---|---|---|
+| Formal source | 27 / 0 | 165 | 8.69s |
+| Formal compiled | 9 / 0 | 86 | 3.75s |
+| Original experiment source | 11 / 0 | 193 | 23.09s |
+| Original experiment compiled | 11 / 0 | 194 | 9.20s |
+
+Formal and experiment typechecks pass. Production bundle: 400 modules, 36ms;
+compile: 314ms. Separate test host: 350 modules, 56ms bundle / 336ms compile.
+Production bytes: **109,942,960**; test host: **109,631,664**. Exact tools/pins/hashes
+are in `evidence/review-fixes/environment.txt`; dependencies/lock unchanged.
+Compiled tests retain empty PATH, isolated HOME/cwd, moved source/migration
+resources and same-executable launch. Controller still uses installed Bun; this
+is Linux x86_64 + procfs evidence, not a clean VM or another platform claim.
+
+Logs: `evidence/review-fixes/{verify,spike-regression}.log`. Initial failed full
+verification `verify-hung-test.log` is retained: a new test evaluated Bun's rejects
+matcher before releasing its gate, blocking the test. After 61.562s the exact
+owned runner was killed (exit 137), its recorded temporary state cleaned, and the
+test reordered to observe a settled outcome after barrier release. This was not
+a product pass. The corrected focused test and full suites above pass.
+
+Production run remains AUTH_NOT_CONFIGURED, with no fake flag/env bypass. No
+real Agent/model/notification/identity integration or user machine was touched.
+No new dependency or generic PoC; no push/PR/merge/release/history rewrite.
+Independent review is **pending parent**: this executor has no independent
+sub-agent launch tool; self-review is recorded separately, not called independent.
+Original remaining production gates below are unchanged. Final owned-process
+and temporary-source restoration audit is recorded in `evidence/review-fixes/cleanup-audit.json`.
+
+---
+
+# Baseline implementation measurements (cb8fa40)
 
 2026-11-20, Asia/Shanghai. Base: `879ae27f4f319de6c79d0bb32f6640a1292f75a7`.
 This is bounded modular implementation, **not production-ready** and not another

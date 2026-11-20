@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) log buffer allocation failure does not leave an opened descriptor [31.38ms]
+
+ 1 pass
+ 11 filtered out
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [140.00ms]
+exit_code=0

@@ -69,9 +69,14 @@ PID killing. See the explicit adaptation in ../../docs/task-core-opencode-map.md
 Effect Layer/Scope owns the SQLite client; Drizzle uses that same Effect client.
 Embedded migration has a checksum/version gate. Task terminal state and stable
 outbox event commit together. Lost starting/running/cancelling tasks become unknown,
-never replayed. Queued records remain safe to dispatch after a restart, with a new
-pre-spawn verifier check. Drain stops admission and waits only current preparing /
-worker activity; historical unknown is listed but does not block it or outbox I/O.
+never replayed. After an abrupt termination, previously queued (unstarted) records
+remain eligible for dispatch with a new pre-spawn verifier check. Successful drain
+has a stronger guarantee: synchronously close admission, settle all admitted commit
+promises, finish the current preparing/worker activity, then transactionally cancel
+all remaining queued records before returning. A submission admitted before drain
+may return queued while drain is in progress, but cannot remain queued and launch
+after successful drain/restart. A verifier-pending request not yet admitted is
+rejected without a ledger row. Historical unknown does not block drain.
 
 Only internal authenticated protocol supports health/drain/shutdown; these are not
 new user-facing business commands. Automatic version replacement, ownership-file
@@ -84,3 +89,19 @@ production process-tree cancellation (.cmd / Windows included), redaction policy
 for potentially sensitive native output, disk retention, upgrades/distribution,
 and full multi-user/Windows ACL hardening remain unfinished. No production
 ready/supported-platform claim follows from Linux-only tests or OpenCode's usage.
+
+## Review-fix log safety boundary
+
+Task log IDs must be UUID-shaped, including IDs read back from SQLite. On Linux,
+read and append opens pin the canonical private state directory with a descriptor,
+use `/proc/self/fd`-relative `O_NOFOLLOW` opens, and validate the opened inode with
+fstat (regular, current owner, private, single link). Reads use that same descriptor
+for size/data; append writers share the same guard. Path replacement cannot
+redirect an already pinned open. Bounded allocation happens before acquiring the
+read descriptor, and all acquired descriptors have exception-safe cleanup.
+
+This specific guarantee requires Linux O_NOFOLLOW/O_DIRECTORY and procfs; other
+platforms fail closed for log access, with no insecure fallback and no new native
+platform PoC. It is not a sandbox against arbitrary same-UID native code. Review
+fix evidence and exact test/mutation results are in RESULTS.md; independent parent
+review is still required.
