@@ -23,20 +23,37 @@ export function harness(command:string[],env:NodeJS.ProcessEnv=process.env) {
   function receipts(name:string):any[] {
     const file=join(state,name); return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
   }
+  const ownedPids=()=>[...new Set([
+    ...receipts('daemon-starts.jsonl'),...receipts('launches.jsonl'),...receipts('spawns.jsonl')
+  ].map(r=>r.pid as number))];
+  // Acceptance path: this must fail BEFORE finally/cleanup is allowed to rescue it.
+  async function strictStop() {
+    const before=receipts('daemon-starts.jsonl');
+    const activeBefore=ownedPids().filter(alive);
+    const response=await call('stop');
+    expect(response.stopping).toBe(true);
+    expect(before.some(r=>r.pid===response.pid&&activeBefore.includes(r.pid))).toBe(true);
+    await until(async()=>ownedPids().filter(alive),pids=>pids.length===0,3000);
+    expect(receipts('daemon-starts.jsonl')).toEqual(before);
+    expect(ownedPids().filter(alive)).toEqual([]);
+    return response;
+  }
   async function cleanup() {
-    if(receipts('daemon-starts.jsonl').some(r=>alive(r.pid)))await raw('stop');
-    const pids=[...receipts('daemon-starts.jsonl'),...receipts('spawns.jsonl')].map(r=>r.pid as number);
-    for(const pid of pids) {
+    const report={stopExit:null as number|null,forcedPids:[] as number[]};
+    if(receipts('daemon-starts.jsonl').some(r=>alive(r.pid)))report.stopExit=(await raw('stop')).code;
+    for(const pid of ownedPids()) {
       if(!alive(pid))continue;
       await until(async()=>alive(pid),v=>!v,1000).catch(()=>{
-        // Verify this exact PID still belongs to our isolated state before killing.
+        // Safety only, never accepted as evidence that stop worked.
         const argv=readFileSync(`/proc/${pid}/cmdline`,'utf8');
         if(!argv.includes(state))throw new Error('refuse to kill unrecognized PID');
-        process.kill(pid,'SIGKILL');
+        process.kill(pid,'SIGKILL');report.forcedPids.push(pid);
       });
       await until(async()=>alive(pid),v=>!v,2000);
     }
+    if(report.forcedPids.length)console.error('SAFETY_CLEANUP_NOT_STOP_SUCCESS '+JSON.stringify(report));
     rmSync(state,{recursive:true,force:true});
+    return report;
   }
-  return {state,call,raw,cleanup,receipts};
+  return {state,call,raw,cleanup,strictStop,receipts};
 }

@@ -1,4 +1,4 @@
-recorded_at=2026-11-20 17:10:52 Asia/Shanghai
+recorded_at=2026-11-20 17:22:46 Asia/Shanghai
 Linux 6.12.113+ x86_64
 bun=1.4.4
 Version 6.0.3
@@ -10,6 +10,7 @@ Version 6.0.3
 ├── effect@4.1.0
 └── typescript@6.0.2
 artifact_bytes=109918384
-09182c18f0dcfa7b2e1cb94b493d8b26c11b555d8d9a42ca94091c4f2478b739  dist/spike
+17abe367c354d7eeaf0aba8a28b54ce21269945f748398862a18b1256b7817e1  dist/spike
+mutation_controller_exit=0 (four intended test exits=1)
 frozen_install_exit=0
 verify_exit=0

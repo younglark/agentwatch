@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { harness, until, alive, pause } from './harness.ts';
+import { existsSync } from 'node:fs';
+import { harness, until, alive } from './harness.ts';
 export function contracts(label:string,command:string[],env?:NodeJS.ProcessEnv) {
   const check=(name:string,body:(h:ReturnType<typeof harness>)=>Promise<void>)=>test(`${label}: ${name}`,async()=>{
     const h=harness(command,env);try{
@@ -12,6 +13,23 @@ export function contracts(label:string,command:string[],env?:NodeJS.ProcessEnv) 
         if(terminal)expect(events[0].terminal).toBe(t.state);
       }
     }finally{await h.cleanup();}
+  },20000);
+  test(`${label}: strict stop exits daemon and active fake without cleanup fallback`,async()=>{
+    const h=harness(command,env);let verified=false;
+    try {
+      const task=await h.call('run',{request_id:'stop-running',mode:'long',durationMs:10000});
+      const e=await until(()=>h.call('evidence'),e=>e.spawns.some((r:any)=>r.id===task.id));
+      expect(alive(e.spawns.find((r:any)=>r.id===task.id).pid)).toBe(true);
+      await h.strictStop();verified=true;
+    } catch(e) {
+      console.error('STRICT_STOP_FAILED_BEFORE_CLEANUP '+String(e));throw e;
+    } finally {
+      const cleanup=await h.cleanup();
+      if(verified) {
+        expect(cleanup.forcedPids).toEqual([]);expect(existsSync(h.state)).toBe(false);
+        console.log('STRICT_STOP_ACCEPTED_WITHOUT_FALLBACK');
+      }
+    }
   },20000);
   check('eight concurrent CLIs elect exactly one daemon and SQLite migration is embedded',async h=>{
     const health=await Promise.all(Array.from({length:8},()=>h.call('health')));
@@ -52,15 +70,32 @@ export function contracts(label:string,command:string[],env?:NodeJS.ProcessEnv) 
     expect((await h.call('wait',{id:task.id,timeoutMs:3000})).state).toBe('cancelled');
     expect(alive(running.pid)).toBe(false);
   });
-  check('queued and starting cancellation never spawn',async h=>{
-    const queued=await h.call('run',{request_id:'queued',queueMs:3000});
-    expect((await h.call('cancel',{id:queued.id})).state).toBe('cancelled');
-    const starting=await h.call('run',{request_id:'starting',startMs:1500});
-    await until(()=>h.call('status',{id:starting.id}),t=>t.state==='starting');
-    expect((await h.call('cancel',{id:starting.id})).state).toBe('cancelled');
-    await pause(1600);
-    const e=await h.call('evidence');expect(e.spawns).toHaveLength(0);expect(e.outbox).toHaveLength(2);
-  });
+  for(const phase of ['claim','launch'] as const) {
+    check(`deterministic ${phase} cancellation cannot launch after acknowledgement`,async h=>{
+      const request_id='cancel-at-'+phase;
+      const barrier=(operation:string)=>h.call('test-barrier',{request_id,phase,operation});
+      try {
+        await barrier('arm');
+        const task=await h.call('run',{request_id,durationMs:0});
+        const reached=await until(()=>barrier('status'),b=>b.reached);
+        expect(reached.completed).toBe(false);
+        expect(reached.released).toBe(false);
+        expect((await h.call('status',{id:task.id})).state).toBe(phase==='claim'?'queued':'starting');
+        const cancelled=await h.call('cancel',{id:task.id});
+        expect(cancelled.state).toBe('cancelled');expect(cancelled.pid).toBeNull();
+        expect((await h.call('evidence')).launches).toHaveLength(0);
+        await barrier('release');
+        // Acknowledges the ENTIRE worker attempt completed, not merely a timer.
+        await until(()=>barrier('status'),b=>b.completed);
+        const e=await h.call('evidence');
+        expect(e.launches.filter((r:any)=>r.id===task.id)).toHaveLength(0);
+        expect(e.spawns.filter((r:any)=>r.id===task.id)).toHaveLength(0);
+        expect(e.outbox).toHaveLength(1);
+        expect((await h.call('status',{id:task.id})).state).toBe('cancelled');
+        console.log(`CANCEL_BARRIER_VERIFIED phase=${phase} completed=true launches=0 child_receipts=0`);
+      } catch(e) {console.error('CANCEL_BARRIER_ASSERTION_FAILED '+phase+' '+String(e));throw e;}
+    });
+  }
   check('launch/cancel boundary produces only confirmed cancellation, at most one spawn',async h=>{
     for(let i=0;i<4;i++) {
       const task=await h.call('run',{request_id:'race-'+i,startMs:i*15,durationMs:2000});

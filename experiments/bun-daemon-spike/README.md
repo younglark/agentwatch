@@ -47,3 +47,27 @@ may briefly start multiple **candidate processes**; only one binds and becomes t
 daemon. Scope finalizers stop the worker/owned fake and close server/SQLite on the
 explicit stop path. SIGKILL cannot run finalizers: an old fake may remain alive,
 which is exactly why restart records unknown, never a false confirmed exit.
+
+## Review regression checks
+
+`strict stop` is a dedicated acceptance test: no cleanup rescue may establish its
+success. The general harness still rescues exact owned PIDs on failures and after
+intentional crashes; it prints `SAFETY_CLEANUP_NOT_STOP_SUCCESS` when it does so.
+
+`test-barrier` is another internal-only hook. Tests arm claim/launch barriers,
+observe arrival, acknowledge cancellation, release, then await completion of the
+whole worker attempt. Parent `launches.jsonl` receipts are synchronous process-
+creation evidence, complementary to child-owned `spawns.jsonl`; no timing sleep is
+used to prove “did not launch”.
+
+To rerun the bounded red/green sensitivity checks **alone** from this directory:
+
+```sh
+bun scripts/check-review-mutants.ts && bun run verify
+```
+
+The mutation runner temporarily edits only this experiment's main/engine source,
+runs each targeted assertion expecting failure, validates the intended failure,
+and restores source in finally. Do not run it concurrently with verify or other
+work in this checkout. Expected red failures are not successful product tests;
+the subsequent restored full suite supplies the green evidence.

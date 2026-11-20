@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import { makeStore, tasks } from './store.ts';
 import { createEngine } from './engine.ts';
 
-const actionSchema = Schema.Literals(['health','stop','serve','fake','run','status','logs','wait','cancel','evidence','retry-outbox','drop-run']);
+const actionSchema = Schema.Literals(['health','stop','serve','fake','run','status','logs','wait','cancel','evidence','retry-outbox','drop-run','test-barrier']);
 declare const SPIKE_COMPILED: boolean;
 const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
 // Linux abstract socket: atomic bind, automatically released on SIGKILL.

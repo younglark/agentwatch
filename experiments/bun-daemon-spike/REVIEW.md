@@ -43,3 +43,37 @@ Corrected before final verification:
   fake after shutdown has begun.
 
 Known limitations are tracked in RESULTS.md, not hidden as passing behavior.
+
+## Follow-up: two externally reported Spec findings
+
+Follow-up fixed point: `52cdfef07da6a92a129095431a5b2e28ccb8e72d`.
+The parent reported independent Standards review with no findings and Spec review
+with two acceptance-evidence findings. That is context, not independent approval
+of this follow-up. Scope stays limited to those two findings.
+
+1. **Accepted:** previous cleanup could SIGKILL an unresponsive daemon/child and
+   still return successfully. The original RESULTS stop PASS was unsupported by
+   that helper. Add strictStop, which asserts stop response and observed exit of
+   all owned daemon/fake PIDs before any cleanup call. The dedicated test checks
+   zero fallback PIDs and directory deletion; failures are logged and rethrown
+   before finally performs safety rescue. Cleanup now reports forced PIDs and is
+   explicitly separate from acceptance (hard-crash tests may need rescue).
+2. **Accepted:** fixed start delays and “spawn <= 1” did not prove that an
+   acknowledged pre-start cancellation forbids a later launch. Add bounded claim
+   and launch barriers outside the SQLite transactions, with reached/released /
+   whole-attempt-completed acknowledgements. After cancel returns cancelled/no PID,
+   release, await completion, and assert zero parent process-creation receipts and
+   zero child receipts. Keep the previous sampled launch/cancel test only as
+   supplementary coverage, not as the proof of this stronger contract.
+
+No defect in the existing stop/cancel state logic was exposed by the stronger
+assertions; the changes are evidence/harness improvements and internal test
+instrumentation. The four temporary mutations test sensitivity; none are kept in
+application source. Mutation runner validates the intended assertion failure, not
+merely a nonzero process exit, and restores each original file in finally.
+
+Local follow-up review checks: barriers hold no SQL transaction lock, shutdown
+releases test barriers to permit safe cleanup, parent launch receipts are written
+synchronously after actual Bun.spawn (covering a child killed before its own
+receipt), and mutations touch only the isolated experiment. No root dependencies,
+auth/RPC, real agents/notifications, publishing or history changes.

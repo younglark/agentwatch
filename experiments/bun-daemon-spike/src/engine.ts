@@ -20,6 +20,31 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
   });
   const children=new Map<string,Bun.Subprocess>();
   let busy=false,closed=false,worker:Promise<void>|undefined;
+  // Internal deterministic test barriers only; never persisted as product state.
+  type Phase='claim'|'launch';
+  type Barrier={request_id:string;phase:Phase;reached:boolean;released:boolean;completed:boolean;wait:Promise<void>;release:()=>void};
+  const barriers=new Map<string,Barrier>();
+  const view=({wait,release,...state}:Barrier)=>state;
+  function controlBarrier(input:any) {
+    const {request_id,phase,operation}=input;
+    if(typeof request_id!=='string'||!['claim','launch'].includes(phase))throw new Error('invalid barrier');
+    const key=request_id+':'+phase;
+    if(operation==='arm') {
+      if(barriers.has(key))throw new Error('barrier already armed');
+      let release!:()=>void;
+      const wait=new Promise<void>(r=>release=r);
+      barriers.set(key,{request_id,phase,reached:false,released:false,completed:false,wait,release});
+    }
+    const barrier=barriers.get(key);if(!barrier)throw new Error('barrier not armed');
+    if(operation==='release') {barrier.released=true;barrier.release();}
+    else if(operation!=='arm'&&operation!=='status')throw new Error('invalid barrier operation');
+    return view(barrier);
+  }
+  async function hold(request_id:string,phase:Phase,entered:Barrier[]) {
+    const barrier=barriers.get(request_id+':'+phase);if(!barrier)return;
+    entered.push(barrier);barrier.reached=true;await barrier.wait;
+  }
+
   const finish=(id:string,target:string,code:number|null=null)=>sql.withTransaction(Effect.gen(function*(){
     const current=yield* get(id);
     if(terminalStates.includes(current.state)) return current;
@@ -35,9 +60,11 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
   })));
   async function tick() {
     if(busy||closed)return; busy=true;
+    const entered:Barrier[]=[];
     try {
       const candidates=await run(orm.select().from(tasks).where(eq(tasks.state,'queued')));
       const task=candidates.find(t=>t.not_before<=Date.now()); if(!task)return;
+      await hold(task.request_id,'claim',entered);
       const claimed=await run(sql.withTransaction(Effect.gen(function*(){
         const t=yield* get(task.id); if(t.state!=='queued')return false;
         yield* orm.update(tasks).set({state:'starting'}).where(eq(tasks.id,t.id)); return true;
@@ -45,6 +72,7 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
       if(!claimed)return;
       const input=JSON.parse(task.input) as Schema.Schema.Type<typeof Input>;
       await pause(input.startMs);
+      await hold(task.request_id,'launch',entered);
       // Cancellation and launch contend on the same SQLite transaction lock.
       // No await occurs between the final state check and synchronous spawn.
       const child=await run(sql.withTransaction(Effect.gen(function*(){
@@ -53,7 +81,9 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
           const child=Bun.spawn(self('fake',JSON.stringify({id:t.id,...input}),'--state',state),{
             stdin:'ignore',stdout:Bun.file(join(state,t.id+'.stdout')),stderr:Bun.file(join(state,t.id+'.stderr'))
           });
-          children.set(t.id,child); return child;
+          children.set(t.id,child);
+          appendFileSync(join(state,'launches.jsonl'),JSON.stringify({id:t.id,pid:child.pid})+'\n');
+          return child;
         });
         yield* orm.update(tasks).set({state:'running',pid:child.pid}).where(eq(tasks.id,t.id));
         return child;
@@ -62,7 +92,7 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
       const code=await child.exited;
       await run(finish(task.id,code===0?'succeeded':'failed',code));
       children.delete(task.id);
-    } finally { busy=false; }
+    } finally { for(const barrier of entered)barrier.completed=true;busy=false; }
   }
   const timer=setInterval(()=>{
     if(!busy&&!closed) worker=tick().catch(e=>{appendFileSync(join(state,'errors.log'),String(e)+'\n');});
@@ -70,11 +100,13 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
   return {
     async close() {
       closed=true; clearInterval(timer);
+      for(const barrier of barriers.values()) {barrier.released=true;barrier.release();}
       // Tests stop only their own service; shutdown waits for confirmed fake exit.
       for(const child of children.values())child.kill('SIGKILL');
       await worker;
     },
     async handle(action:string,input:any):Promise<any> {
+      if(action==='test-barrier')return controlBarrier(input);
       if(action==='run') {
         const v=Schema.decodeUnknownSync(Input)({mode:'success',durationMs:100,queueMs:0,startMs:0,...input});
         if(!/^[\w-]{1,100}$/.test(v.request_id)) throw new Error('invalid request_id');
@@ -128,7 +160,7 @@ export async function createEngine(store: Effect.Success<ReturnType<typeof makeS
       }
       if(action==='evidence') {
         const lines=(file:string)=>existsSync(join(state,file))?readFileSync(join(state,file),'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
-        return {spawns:lines('spawns.jsonl'),daemons:lines('daemon-starts.jsonl'),
+        return {launches:lines('launches.jsonl'),spawns:lines('spawns.jsonl'),daemons:lines('daemon-starts.jsonl'),
           tasks:await run(orm.select().from(tasks)),outbox:await run(sql`SELECT * FROM outbox ORDER BY task_id`)};
       }
       throw new Error('unknown action');

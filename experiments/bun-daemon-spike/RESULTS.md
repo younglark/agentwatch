@@ -37,14 +37,16 @@ launch `bun main.ts`, while binary mode must launch only its own executable.
 Text migration imports can be inlined, so embeddedFiles.length is not a reliable
 compiled-mode detector.
 
-Final run: frozen install **exit 0**, typecheck **exit 0**, source **9 passed / 0
-failed** (152 assertions, **20.26 s**), compile **exit 0** (395 modules; bundle
-43 ms, compile 330 ms), standalone binary **9 passed / 0 failed** (153 assertions,
-**9.30 s**); full verify **exit 0**. Assertion totals can vary with polling.
+Review follow-up final run: mutation controller **exit 0** after **four intended
+assertion failures** (each targeted Bun test exits 1), then frozen install **exit
+0**, typecheck **exit 0**, restored source **11 passed / 0 failed** (194 assertions,
+**23.57 s**), compile **exit 0** (395 modules; bundle 41 ms, compile 536 ms), standalone
+binary **11 passed / 0 failed** (194 assertions, **10.00 s**); full verify **exit 0**.
+Assertion totals can vary with polling. Mutation sensitivity was exercised in
+source mode; the same restored contracts passed in compiled mode.
 Artifact `dist/spike`: **109,918,384 bytes** (about **104.83 MiB**, uncompressed).
 See evidence/environment.txt for SHA256. The binary is intentionally gitignored;
-no release or publication occurred. This size is useful feasibility evidence for
-the Bun single-executable decision; no memory/startup benchmark was conducted.
+no release or publication occurred. No memory/startup benchmark was conducted.
 Evidence logs have trailing line whitespace normalized only.
 
 ## Executed acceptance matrix
@@ -62,15 +64,45 @@ passed on this host, not an exhaustive concurrency/cross-platform proof.
 | Same ID / changed normalized request | PASS | PASS | Conflict exits nonzero; no new task |
 | Fake failure and separate stdout/stderr flood | PASS | PASS | Exit 7; each stream exactly 2,097,152 bytes |
 | Wait timeout is not execution timeout | PASS | PASS | Wait timed out; task/child still running |
-| Cancel queued and starting | PASS | PASS | Both cancelled, zero child receipts after start delay expires |
-| Launch/cancel boundary | PASS | PASS | Four bounded samples; confirmed cancelled; at most one child each |
+| Cancel selected-queued / starting | PASS | PASS | Deterministic claim / launch barrier; cancel returns cancelled/no PID; release and whole-attempt completion; zero parent launches and child receipts |
+| Launch/cancel sampled boundary (supplement only) | PASS | PASS | Four bounded samples; confirmed cancelled; at most one child each; NOT the pre-start cancellation proof |
 | Running cancel waits for child exit | PASS | PASS | Terminal cancelled and observed child no longer alive |
 | Hard crash during starting | PASS | PASS | Unknown, zero child receipts, same ID not replayed |
 | Unknown does not block wait/new work | PASS | PASS | Immediate unknown result and next task succeeds |
 | Hard crash during running | PASS | PASS | New daemon; original unknown; spawn count unchanged |
 | Terminal state and outbox consistency | PASS | PASS | All observed terminal tasks have exactly one matching event |
 | Fake outbox retry persistence | PASS | PASS | Post-restart attempts 1 failed, 2 delivered; no source respawn |
-| Explicit stop and temporary resource cleanup | PASS | PASS | Only exact owned PIDs; exit observed before state deletion |
+| Explicit stop without safety fallback | PASS | PASS | Dedicated active-fake test: stop response, all daemon/fake exits observed before cleanup, zero forced PIDs |
+| Private directory removal after strict stop | PASS | PASS | Directory absence asserted after cleanup; no rescue needed in this dedicated test |
+
+## Review correction and red/green proof
+
+The stop PASS at initial commit `52cdfef` was **not justified** by its cleanup
+helper: an ignored stop followed by harness SIGKILL still passed. The initial
+fixed-delay and “spawn <= 1” checks likewise did not prove absence of a post-cancel
+launch. The updated rows above supersede those two evidence claims, not weaken
+the original contracts. No existing stop/cancel implementation defect was exposed
+by the new assertions; the missing evidence is now explicit and stronger.
+
+- `test-barrier` pauses outside SQL transactions at selected-queued/pre-claim and
+  starting/pre-launch. Tests observe arrival, cancel, require cancelled/no PID,
+  release and await the **entire worker attempt completed**, then require zero
+  parent process-creation receipts and zero child receipts. No fixed sleep proves
+  absence. Synchronous parent receipts also catch a spawned child killed before
+  it can append its own receipt.
+- `strictStop` cannot invoke cleanup. It requires a successful stop response and
+  observed exit of the daemon plus its live fake. The existing daemon stop path
+  itself SIGKILLs its fake; this is not a graceful-child-signal claim. The test then checks
+  safety-cleanup forced PID list is empty and the private directory is absent.
+- evidence/review-mutants.log shows ignored-stop and orphan-on-stop both fail the
+  strict assertion **before** `SAFETY_CLEANUP_NOT_STOP_SUCCESS` rescues owned PIDs;
+  stale-queued-claim and launch-after-cancel both fail the exact zero-launch
+  assertion with expected length 0 / received 1. The runner restores source in
+  finally and verifies the intended assertion, not just any nonzero exit.
+- evidence/verify.log shows restored source and isolated compiled green runs,
+  `STRICT_STOP_ACCEPTED_WITHOUT_FALLBACK` and both completed barrier confirmations.
+  Intentional hard-crash cases still require cleanup of their orphan fake; their
+  explicit safety-rescue messages are **not** counted as successful normal stop.
 
 ## What remains unproven / intentionally omitted
 

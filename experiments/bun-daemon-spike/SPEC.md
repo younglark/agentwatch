@@ -21,3 +21,22 @@ No changes to existing auth/RPC or root package files, credentials, real agents,
 models, notification calls, installation of a user service, publishing, pushing
 or PR creation. CLI fake inputs are internal test cases, not arbitrary commands.
 Tests observe CLI requests/responses, actual child receipts, logs and process exit.
+
+## Review follow-up acceptance (2026-11-20, Asia/Shanghai)
+
+Only two evidence gaps are in scope; none of the contracts above are weakened:
+
+- Explicit stop must return successfully, then the daemon and its active fake
+  must be observed exited **before** cleanup. A cleanup SIGKILL is safety rescue,
+  never a passing stop result. Check no rescue was needed and the private test
+  directory is removed afterward. On failure, report the assertion before rescue.
+- For queued/starting cancellation, arm an internal barrier before claim or before
+  the final launch transaction. Wait for the worker to reach it; cancel must return
+  cancelled with no PID. Release and wait for the entire worker attempt to complete,
+  then require zero synchronous parent launch receipts and zero child receipts.
+  Fixed sleeps and a mere “spawn <= 1” are not proof of pre-start cancellation.
+
+The internal test-barrier hook and parent-owned launch receipts are bounded test
+instrumentation, not new product capabilities. Reversible mutation checks must
+show the assertions reject ignored stop, orphaning stop, stale queued claim and
+launch-after-cancel faults, then restore code before full green verification.

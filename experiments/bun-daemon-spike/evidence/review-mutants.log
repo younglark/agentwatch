@@ -1,0 +1,120 @@
+MUTANT_BEGIN stale-queued-claim
+bun test v1.4.4 (38afee6c8)
+
+test/source.test.ts:
+CANCEL_BARRIER_ASSERTION_FAILED claim Error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+86 |         expect((await h.call('evidence')).launches).toHaveLength(0);
+87 |         await barrier('release');
+88 |         // Acknowledges the ENTIRE worker attempt completed, not merely a timer.
+89 |         await until(()=>barrier('status'),b=>b.completed);
+90 |         const e=await h.call('evidence');
+91 |         expect(e.launches.filter((r:any)=>r.id===task.id)).toHaveLength(0);
+                                                                ^
+error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:91:60)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:7:13)
+(fail) source: deterministic claim cancellation cannot launch after acknowledgement [2350.94ms]
+
+ 0 pass
+ 10 filtered out
+ 1 fail
+ 17 expect() calls
+Ran 1 test across 1 file. [2.36s]
+
+MUTANT_KILLED stale-queued-claim exit=1
+MUTANT_RESTORED stale-queued-claim
+MUTANT_BEGIN launch-after-cancel
+bun test v1.4.4 (38afee6c8)
+
+test/source.test.ts:
+CANCEL_BARRIER_ASSERTION_FAILED launch Error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+86 |         expect((await h.call('evidence')).launches).toHaveLength(0);
+87 |         await barrier('release');
+88 |         // Acknowledges the ENTIRE worker attempt completed, not merely a timer.
+89 |         await until(()=>barrier('status'),b=>b.completed);
+90 |         const e=await h.call('evidence');
+91 |         expect(e.launches.filter((r:any)=>r.id===task.id)).toHaveLength(0);
+                                                                ^
+error: expect(received).toHaveLength(expected)
+
+Expected length: 0
+Received length: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:91:60)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:7:13)
+(fail) source: deterministic launch cancellation cannot launch after acknowledgement [2356.14ms]
+
+ 0 pass
+ 10 filtered out
+ 1 fail
+ 17 expect() calls
+Ran 1 test across 1 file. [2.36s]
+
+MUTANT_KILLED launch-after-cancel exit=1
+MUTANT_RESTORED launch-after-cancel
+MUTANT_BEGIN ignored-stop
+bun test v1.4.4 (38afee6c8)
+
+test/source.test.ts:
+STRICT_STOP_FAILED_BEFORE_CLEANUP Error: condition timed out: [539354,539382]
+SAFETY_CLEANUP_NOT_STOP_SUCCESS {"stopExit":0,"forcedPids":[539354,539382]}
+ 6 | export function alive(pid:number) {
+ 7 |   try { return !readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1]!.startsWith('Z'); } catch { return false; }
+ 8 | }
+ 9 | export async function until<A>(fn:()=>Promise<A>, pred:(v:A)=>boolean, ms=5000):Promise<A> {
+10 |   const end=Date.now()+ms;
+11 |   for(;;) {const v=await fn();if(pred(v))return v;if(Date.now()>end)throw new Error('condition timed out: '+JSON.stringify(v));await pause(15);}
+                                                                                   ^
+error: condition timed out: [539354,539382]
+      at until (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/harness.ts:11:79)
+      at async strictStop (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/harness.ts:36:11)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:23:15)
+(fail) source: strict stop exits daemon and active fake without cleanup fallback [6010.38ms]
+
+ 0 pass
+ 10 filtered out
+ 1 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [6.02s]
+
+MUTANT_KILLED ignored-stop exit=1
+MUTANT_RESTORED ignored-stop
+MUTANT_BEGIN orphan-on-stop
+bun test v1.4.4 (38afee6c8)
+
+test/source.test.ts:
+STRICT_STOP_FAILED_BEFORE_CLEANUP Error: condition timed out: [540125]
+SAFETY_CLEANUP_NOT_STOP_SUCCESS {"stopExit":null,"forcedPids":[540125]}
+ 6 | export function alive(pid:number) {
+ 7 |   try { return !readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1]!.startsWith('Z'); } catch { return false; }
+ 8 | }
+ 9 | export async function until<A>(fn:()=>Promise<A>, pred:(v:A)=>boolean, ms=5000):Promise<A> {
+10 |   const end=Date.now()+ms;
+11 |   for(;;) {const v=await fn();if(pred(v))return v;if(Date.now()>end)throw new Error('condition timed out: '+JSON.stringify(v));await pause(15);}
+                                                                                   ^
+error: condition timed out: [540125]
+      at until (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/harness.ts:11:79)
+      at async strictStop (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/harness.ts:36:11)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/experiments/bun-daemon-spike/test/contracts.ts:23:15)
+(fail) source: strict stop exits daemon and active fake without cleanup fallback [5289.76ms]
+
+ 0 pass
+ 10 filtered out
+ 1 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [5.30s]
+
+MUTANT_KILLED orphan-on-stop exit=1
+MUTANT_RESTORED orphan-on-stop
