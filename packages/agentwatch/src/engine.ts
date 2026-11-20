@@ -13,7 +13,7 @@ export interface EngineOptions {
 export async function createTaskEngine(options:EngineOptions) {
   const {store,state,verify,execute}=options;
   await store.recover();
-  const notifier=options.notifications?createNotifier(store,options.notifications,options.onError):undefined;
+  const notifier=options.notifications?createNotifier(store,options.notifications,state,options.onError):undefined;
   let accepting=true,worker:Promise<void>|undefined;
   const children=new Map<string,Child>(),submissions=new Set<Promise<unknown>>();
   async function view(task:TaskRecord) {

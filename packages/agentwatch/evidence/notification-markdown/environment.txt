@@ -1,0 +1,6 @@
+time_asia_shanghai=2026-11-20 23:43:36 CST
+cwd=/workspace/agentwatch-bun-spike/packages/agentwatch
+branch=feat/bun-task-core
+head=e1d4aad9f69ef03d1c971464badc322ac8e3a7f2
+bun=1.4.4
+uname=Linux grok-bot-vm-162271303 6.12.113+ #1 SMP PREEMPT_DYNAMIC Wed Nov 18 00:13:43 UTC 2026 x86_64 GNU/Linux

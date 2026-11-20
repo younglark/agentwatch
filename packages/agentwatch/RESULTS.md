@@ -1,7 +1,68 @@
-# t186 完整可选元数据迁移矩阵与精确 peer 后继 — current
+# t201 终态通知附有界原始 stdout/stderr — current
+
+2026-11-21，Asia/Shanghai。基线仍 `e1d4aad`；在未提交的 Markdown 通知改动上继续，
+未 commit/push/git config，不做 live 真实后端。
+
+## 行为
+
+默认发给 bot 的终态正文仍是简体中文 Markdown，CLI stdout 仍是一行 JSON。通知在有界
+字段之后分开展示原始 stdout 和 stderr：每路最多 4 KiB 头尾合计，按字节截断，超限写明
+省略字节数。空文件或缺失日志（含 spawn 前失败、可能尚未创建日志）写「（无输出）」，
+不附查询说明。权限/IO 等读取失败不伪装成无输出，而是写「输出读取失败，无法生成预览」，
+并附主机名、该路绝对路径与 `logs` 查询；正文不泄露原生 error、栈或 `IPC_AUTH`。
+用可变长度 code fence 原样嵌入；主机名、路径和命令用按内容加长的 Markdown 行内代码，
+避免反引号拆破。该路被截断或读取失败时，附必须在该主机上运行的、仅针对当前平台的
+`agentwatch logs` 分页命令（`--offset 0 --limit 65536`，若 `truncated` 则继续用
+`next_offset`）：Linux/macOS 标注 POSIX shell 并用 POSIX 单引号，Windows 标注
+PowerShell 并用 `''` 转义单引号，不把 POSIX 引号冒充为跨平台。不新增 logs
+参数，不以 cat 为官方入口，不发 argv/cwd/request_id/token/report。完整日志仍留本地。
+
+## 复核增量（读取失败 / 反引号路径 / 平台相关 quoting）
+
+TDD：先补失败测试再修复。本增量只跑 typecheck 与针对此变更的测试，**未重跑全量**。
+上轮全量数字保留对照。
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| typecheck（本增量） | 通过 | — | 4.25s |
+| 源码通知相关（core.test 过滤 16 项，含 3 个新测试） | 16 / 0 | 156 | 0.634s |
+| 源码契约（frozen bounded notification） | 1 / 0 | 24 | 2.41s |
+| 上轮正式源码全量（未重跑） | 215 / 0 | 1677 | 98.08s |
+| 上轮正式编译全量（未重跑） | 74 / 0 | 586 | 38.55s |
+
+本增量证据在 `evidence/notification-output-review/`；上轮全量证据仍在
+`evidence/notification-output/`。当前边界以本节与 README 为准。
+
+# t193 默认终态通知改为有界 Markdown — historical
+
+2026-11-20，Asia/Shanghai。基线 `e1d4aad`；只改工作树，未 commit/push/git config。
+用户要求发给目标 bot 的默认终态通知以 Markdown 返回。不改 CLI stdout
+（run/status/logs/wait/cancel 仍是一行 JSON，`--json` 保持兼容），不做 live 真实后端。
+
+## 行为
+
+- 发送给 bot 的 `text` 改为简体中文 Markdown：一行标题，后接稳定顺序的列表。
+  succeeded=任务已成功、failed=任务失败、cancelled=任务已取消、unknown=任务状态未知。
+- 正文只含既有有界字段：task_id、event_id 用反引号，exit_code 始终列出，error_code
+  为空则省略该行。不发送 argv、cwd、request_id、日志全文、原生错误、token、report。
+- 内部 outbox payload 仍为结构化 JSON；只改发送 text。标识符已是受控 UUID 格式，
+  不转义破坏反引号内容。
+
+TDD：先改 command-contracts / core 断言为 Markdown（红灯：正文仍是整段 JSON），再改
+`notificationText` 只生成发给 bot 的 text。内部 outbox payload 未改。
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| typecheck | 通过 | — | 3.11s |
+| 正式源码 | 209 / 0 | 1627 | 103.69s |
+| 正式编译 | 74 / 0 | 583 | 38.53s |
+
+证据在 `evidence/notification-markdown/`。本节为历史记录；当前边界以文首与 README 为准。
+
+# t186 完整可选元数据迁移矩阵与精确 peer 后继 — historical
 
 2026-11-20，Asia/Shanghai，基线仍 `b52ba5e`；只改工作树，未 commit/push/git config。
-当前边界以本节与 README 为准；下方记录保留历史，不再将仅 session_id 修复称为完整迁移覆盖。
+本节为历史记录，不再将仅 session_id 修复称为完整迁移覆盖；当前边界以文首与 README 为准。
 
 ## P2：旧 token 无可解析 sub，首次轮换补齐账号绑定（关闭）
 
@@ -300,8 +361,9 @@ Linux/Windows 只读桌面会话，不 refresh、不回写官方文件。任务�
 - 3s绝对请求/响应读取超时、流读取1MiB上限、禁redirect、reader finally取消/释放、AbortSignal
   贯穿发送/对账/drain。秘密只在私有文件与 Authorization 内，不进 argv/诊断，不回显后端body。
 - 通知继续先持久claim inflight；终态不被通知结果污染；崩溃inflight→unknown、可能已dispatch
-  不重放、unknown最多一次先持久登记的只读status、durability恒unverified。六字段冻结正文
-  不含日志/argv/cwd/token/request_id/report；receipt只有有界白名单。
+  不重放、unknown最多一次先持久登记的只读status、durability恒unverified。默认发给 bot
+  的终态通知正文是有界 Markdown（不是整段 JSON），不含日志/argv/cwd/token/request_id/report；
+  CLI stdout 仍为 JSON。receipt只有有界白名单。
 - 必须区分旧CLI的**本地**预请求证据和现在的**远端**错误体：HTTP发出后，即使对端自称
   rpc_dispatched:false/retryable，也维持unknown，不自动重放。公共worker保留可注入的本地
   明确未dispatch+可重试结果，三次总预算和250/500ms退避落盘，engine/store seam验证。
@@ -365,8 +427,9 @@ HEAD仍是c378e8fa4921bf2f544229aa27cfd9116c1074af，请用cached diff复审。
 ## 实现结果
 
 - 新 `src/notifications.ts`：独立于任务执行的通知 worker，通过外部 gbc 的已核 CLI
-  message send + --text-stdin 发送六字段冻结结果 JSON，只读 message status 对账。
+  message send + --text-stdin 当时发送六字段冻结结果 JSON，只读 message status 对账。
   不发日志、argv、cwd、报告文件或 request_id；不总结、不读取 history/transcript。
+  该 JSON 正文是历史默认；当前发给 bot 的终态 text 已改为有界 Markdown，CLI 仍为 JSON。
 - 新 `migrations/002.sql` 与 storage 公共方法：显式 pending / inflight / accepted /
   rejected / not_dispatched / unknown；claim 先持久化，再启动外部副作用；稳定本地
   event_id 不改，message_id 仅首次生成。001 内容/checksum 不变，旧库逐版校验升级。

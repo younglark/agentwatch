@@ -1,0 +1,7 @@
+typecheck: pass (tsc6 --noEmit), 4.25s
+targeted source notification tests: 16 pass / 0 fail, 156 expects, 0.634s
+targeted source contract test: 1 pass / 0 fail, 24 expects, 2.41s
+previous full source suite (NOT re-run): 215 pass / 0 fail, 1677 expects, 98.08s
+previous compiled suite (NOT re-run): 74 pass / 0 fail, 586 expects, 38.55s
+red: 01-red-core.log
+green: 02-green-core.log, 02-green-contracts.log

@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { test,expect } from 'bun:test';
-import { readFileSync,writeFileSync,statSync,existsSync,chmodSync,linkSync,renameSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
+import { readFileSync,writeFileSync,statSync,existsSync,chmodSync,linkSync,renameSync,symlinkSync,unlinkSync,mkdirSync,realpathSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { commandHarness,until,alive } from './command-harness.ts';
 import { readRegistration,request } from '../src/service.ts';
@@ -136,8 +137,17 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const accepted=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
     expect(accepted.value.data.state).toBe('succeeded');expect(accepted.value.data.notification).toMatchObject({transport:'connect_http',attempts:1,durability:'unverified',needs_reconciliation:false,receipt:{delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:'workflow-fixture'}});
     const sent=h.calls.filter(c=>c.method==='SendGrokBotUserMessage');expect(sent).toHaveLength(1);expect(Object.keys(sent[0]!.body)).toEqual(['agentId','messageId','sessionId','text','sentAtMs']);expect(sent[0]!.body).toMatchObject({agentId:'test-bot',messageId:accepted.value.data.notification.message_id,sessionId:''});expect(sent[0]!.body.sentAtMs).toMatch(/^\d{13}$/);
-    const body=readFileSync(join(h.root,'notification-body'),'utf8');expect(body.length).toBeLessThan(1024);expect(body).not.toContain('SECRET_');expect(Object.keys(JSON.parse(body))).toEqual(['version','event_id','task_id','state','exit_code','error_code']);expect(JSON.parse(body)).toMatchObject({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null});
-    expect(accepted.out).not.toContain('SECRET_');expect((await h.call('run',args)).value.data.id).toBe(id);
+    const body=readFileSync(join(h.root,'notification-body'),'utf8');
+    expect(body).toBe([
+      '任务已成功','',`- 任务：\`${id}\``,`- 事件：\`${id}:terminal:1\``,'- 退出码：0','',
+      '## stdout','','```','SECRET_NATIVE_LOG','```','',
+      '## stderr','','（无输出）',
+    ].join('\n'));
+    expect(body).not.toContain('已省略');expect(body).not.toContain('agentwatch logs');expect(body).not.toContain(hostname());
+    expect(()=>JSON.parse(body)).toThrow();
+    expect(body).not.toContain('SECRET_ARGV');expect(body).not.toContain('argv');expect(body).not.toContain(h.cwd);expect(body).not.toContain('notify-accepted');expect(body).not.toContain('request_id');
+    expect(body).not.toContain(join(realpathSync(h.state),id+'.stdout'));
+    expect(accepted.out).not.toContain('SECRET_');expect(JSON.parse(accepted.out).data.id).toBe(id);expect((await h.call('run',args)).value.data.id).toBe(id);
     const info=readRegistration(h.state)!;expect((await request(info,'health',{})).notification_transport).toBe('connect_http');await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
     expect((await h.call('status',[id])).value.data.notification).toEqual(accepted.value.data.notification);expect(h.notificationCalls()).toHaveLength(1);
   });

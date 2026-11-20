@@ -1,0 +1,24 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) notification locally proven not dispatched retryable=false preserves fixed budget [236.22ms]
+(pass) notification locally proven not dispatched retryable=true preserves fixed budget [956.86ms]
+(pass) notifier sends bounded markdown for succeeded exit=0 error=omitted [26.30ms]
+(pass) notifier sends bounded markdown for failed exit=7 error=omitted [43.59ms]
+(pass) notifier sends bounded markdown for failed exit=1 error=BOT_FORBIDDEN [26.24ms]
+(pass) notifier sends bounded markdown for failed exit=null error=SPAWN_FAILED [21.82ms]
+(pass) notifier sends bounded markdown for cancelled exit=null error=omitted [61.83ms]
+(pass) notifier sends bounded markdown for unknown exit=null error=OBSERVATION_LOST [32.64ms]
+(pass) notifier omits unallowlisted error_code from markdown and still stores structured payload [27.65ms]
+(pass) notifier attaches short raw stdout and stderr without a query guide [25.50ms]
+(pass) notifier writes 无输出 for empty streams and does not add a query guide [19.91ms]
+(pass) notifier truncates a long stream to 4KiB head and tail with host path and logs command [18.99ms]
+(pass) notifier truncates stdout and stderr independently [43.17ms]
+(pass) notifier lengthens code fences when output contains backticks [21.98ms]
+(pass) notifier includes raw log bytes and never adds request argv or secrets [21.83ms]
+
+ 15 pass
+ 19 filtered out
+ 0 fail
+ 154 expect() calls
+Ran 15 tests across 1 file. [1.71s]

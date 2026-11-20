@@ -1,0 +1,5 @@
+typecheck: pass (tsc6 --noEmit), 3.11s
+source tests: 209 pass / 0 fail, 1627 expects, 103.69s
+compiled tests: 74 pass / 0 fail, 583 expects, 38.53s
+red: 01-red-core.log (body still JSON), 01-red-contracts.log
+green: 02-green-core.log, 02-green-contracts.log

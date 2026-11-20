@@ -1,0 +1,25 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) notifier sends bounded markdown for succeeded exit=0 error=omitted [75.88ms]
+(pass) notifier sends bounded markdown for failed exit=7 error=omitted [54.19ms]
+(pass) notifier sends bounded markdown for failed exit=1 error=BOT_FORBIDDEN [23.94ms]
+(pass) notifier sends bounded markdown for failed exit=null error=SPAWN_FAILED [20.28ms]
+(pass) notifier sends bounded markdown for cancelled exit=null error=omitted [20.53ms]
+(pass) notifier sends bounded markdown for unknown exit=null error=OBSERVATION_LOST [18.74ms]
+(pass) notifier omits unallowlisted error_code from markdown and still stores structured payload [23.71ms]
+(pass) notifier attaches short raw stdout and stderr without a query guide [20.38ms]
+(pass) notifier writes 无输出 for empty streams and does not add a query guide [23.02ms]
+(pass) notifier truncates a long stream to 4KiB head and tail with host path and logs command [18.56ms]
+(pass) notifier truncates stdout and stderr independently [119.69ms]
+(pass) notifier lengthens code fences when output contains backticks [36.86ms]
+(pass) notifier includes raw log bytes and never adds request argv or secrets [23.95ms]
+(pass) notifier distinguishes read failure from missing or empty logs without leaking native errors [18.29ms]
+(pass) notificationText does not break inline code when state or hostname contains backticks [0.20ms]
+(pass) logs query command is labeled for the actual platform and does not present POSIX quotes as cross-platform [0.25ms]
+
+ 16 pass
+ 21 filtered out
+ 0 fail
+ 156 expect() calls
+Ran 16 tests across 1 file. [634.00ms]

@@ -1,0 +1,18 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) notification locally proven not dispatched retryable=false preserves fixed budget [239.45ms]
+(pass) notification locally proven not dispatched retryable=true preserves fixed budget [948.50ms]
+(pass) notifier sends bounded markdown for succeeded exit=0 error=omitted [19.29ms]
+(pass) notifier sends bounded markdown for failed exit=7 error=omitted [18.98ms]
+(pass) notifier sends bounded markdown for failed exit=1 error=BOT_FORBIDDEN [17.42ms]
+(pass) notifier sends bounded markdown for failed exit=null error=SPAWN_FAILED [17.48ms]
+(pass) notifier sends bounded markdown for cancelled exit=null error=omitted [18.37ms]
+(pass) notifier sends bounded markdown for unknown exit=null error=OBSERVATION_LOST [19.43ms]
+(pass) notifier omits unallowlisted error_code from markdown and still stores structured payload [18.99ms]
+
+ 9 pass
+ 19 filtered out
+ 0 fail
+ 107 expect() calls
+Ran 9 tests across 1 file. [1441.00ms]

@@ -1,0 +1,225 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+279 |   }}});
+280 |   try{
+281 |     const task=await engine.run({request_id:'budget-'+retryable,bot:'test-bot',cwd:state,argv:['claude']});await engine.wait(task.id,5000);
+282 |     const end=Date.now()+2500;let result=await engine.status(task.id);
+283 |     while(result.notification.state!=='not_dispatched'&&Date.now()<end){await new Promise(r=>setTimeout(r,25));result=await engine.status(task.id);}
+284 |     expect(result.state).toBe('succeeded');expect(result.notification).toMatchObject({state:'not_dispatched',attempts:retryable?3:1,durability:'unverified'});expect(attempts).toHaveLength(retryable?3:1);expect(new Set(attempts.map(a=>a.id)).size).toBe(1);
+                                                                             ^
+error: expect(received).toMatchObject(expected)
+
+  {
+    "attempts": 1,
+    "durability": "unverified",
+-   "state": "not_dispatched",
++   "event_id": "21b76bfc-6a0a-4857-b825-f862112ccf95:terminal:1",
++   "last_code": "SEND_UNCERTAIN",
++   "message_id": "44b3f7ea-428e-4ef4-a25c-bfae73f05bd7",
++   "needs_reconciliation": true,
++   "next_attempt_at": 0,
++   "receipt": null,
++   "reconciliation_attempts": 0,
++   "state": "unknown",
++   "transport": "connect_http",
+  }
+
+- Expected  - 1
++ Received  + 9
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:284:72)
+(fail) notification locally proven not dispatched retryable=false preserves fixed budget [2914.77ms]
+279 |   }}});
+280 |   try{
+281 |     const task=await engine.run({request_id:'budget-'+retryable,bot:'test-bot',cwd:state,argv:['claude']});await engine.wait(task.id,5000);
+282 |     const end=Date.now()+2500;let result=await engine.status(task.id);
+283 |     while(result.notification.state!=='not_dispatched'&&Date.now()<end){await new Promise(r=>setTimeout(r,25));result=await engine.status(task.id);}
+284 |     expect(result.state).toBe('succeeded');expect(result.notification).toMatchObject({state:'not_dispatched',attempts:retryable?3:1,durability:'unverified'});expect(attempts).toHaveLength(retryable?3:1);expect(new Set(attempts.map(a=>a.id)).size).toBe(1);
+                                                                             ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "attempts": 3,
++   "attempts": 1,
+    "durability": "unverified",
+-   "state": "not_dispatched",
++   "event_id": "0a4c6218-de81-41aa-884a-fa480b747815:terminal:1",
++   "last_code": "SEND_UNCERTAIN",
++   "message_id": "bad4c43f-275e-4045-857f-f696c7923e0c",
++   "needs_reconciliation": true,
++   "next_attempt_at": 0,
++   "receipt": null,
++   "reconciliation_attempts": 0,
++   "state": "unknown",
++   "transport": "connect_http",
+  }
+
+- Expected  - 2
++ Received  + 10
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:284:72)
+(fail) notification locally proven not dispatched retryable=true preserves fixed budget [2711.82ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务已成功
+- 
+- - 任务：`02a35fd4-a9aa-4900-b46f-a5043f3b04fc`
+- - 事件：`02a35fd4-a9aa-4900-b46f-a5043f3b04fc:terminal:1`
+- - 退出码：0"
++ "{"version":1,"event_id":"02a35fd4-a9aa-4900-b46f-a5043f3b04fc:terminal:1","task_id":"02a35fd4-a9aa-4900-b46f-a5043f3b04fc","state":"succeeded","exit_code":0,"error_code":null}"
+
+- Expected  - 5
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for succeeded exit=0 error=omitted [23.59ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务失败
+- 
+- - 任务：`6efdcc0f-2a4b-4b50-8aac-b59129b047b3`
+- - 事件：`6efdcc0f-2a4b-4b50-8aac-b59129b047b3:terminal:1`
+- - 退出码：7"
++ "{"version":1,"event_id":"6efdcc0f-2a4b-4b50-8aac-b59129b047b3:terminal:1","task_id":"6efdcc0f-2a4b-4b50-8aac-b59129b047b3","state":"failed","exit_code":7,"error_code":null}"
+
+- Expected  - 5
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for failed exit=7 error=omitted [24.40ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务失败
+- 
+- - 任务：`241c82c4-b011-4aff-a7fd-43ee28dc9658`
+- - 事件：`241c82c4-b011-4aff-a7fd-43ee28dc9658:terminal:1`
+- - 退出码：1
+- - 错误：BOT_FORBIDDEN"
++ "{"version":1,"event_id":"241c82c4-b011-4aff-a7fd-43ee28dc9658:terminal:1","task_id":"241c82c4-b011-4aff-a7fd-43ee28dc9658","state":"failed","exit_code":1,"error_code":"BOT_FORBIDDEN"}"
+
+- Expected  - 6
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for failed exit=1 error=BOT_FORBIDDEN [24.16ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务失败
+- 
+- - 任务：`cd7261de-385e-4cde-9e2e-88f9335f85aa`
+- - 事件：`cd7261de-385e-4cde-9e2e-88f9335f85aa:terminal:1`
+- - 退出码：null
+- - 错误：SPAWN_FAILED"
++ "{"version":1,"event_id":"cd7261de-385e-4cde-9e2e-88f9335f85aa:terminal:1","task_id":"cd7261de-385e-4cde-9e2e-88f9335f85aa","state":"failed","exit_code":null,"error_code":"SPAWN_FAILED"}"
+
+- Expected  - 6
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for failed exit=null error=SPAWN_FAILED [20.09ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务已取消
+- 
+- - 任务：`a7f23122-ef4c-4d5b-8fcc-80d151e24ef5`
+- - 事件：`a7f23122-ef4c-4d5b-8fcc-80d151e24ef5:terminal:1`
+- - 退出码：null"
++ "{"version":1,"event_id":"a7f23122-ef4c-4d5b-8fcc-80d151e24ef5:terminal:1","task_id":"a7f23122-ef4c-4d5b-8fcc-80d151e24ef5","state":"cancelled","exit_code":null,"error_code":null}"
+
+- Expected  - 5
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for cancelled exit=null error=omitted [19.32ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务状态未知
+- 
+- - 任务：`1cc57b19-445f-460b-8491-1e665a5eb4df`
+- - 事件：`1cc57b19-445f-460b-8491-1e665a5eb4df:terminal:1`
+- - 退出码：null
+- - 错误：OBSERVATION_LOST"
++ "{"version":1,"event_id":"1cc57b19-445f-460b-8491-1e665a5eb4df:terminal:1","task_id":"1cc57b19-445f-460b-8491-1e665a5eb4df","state":"unknown","exit_code":null,"error_code":"OBSERVATION_LOST"}"
+
+- Expected  - 6
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:315:5)
+(fail) notifier sends bounded markdown for unknown exit=null error=OBSERVATION_LOST [21.64ms]
+293 |   const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+294 |   if(error_code)lines.push(`- 错误：${error_code}`);
+295 |   return lines.join('\n');
+296 | }
+297 | function expectBoundedMarkdown(body:string,expected:string){
+298 |   expect(body).toBe(expected);expect(body.length).toBeLessThan(1024);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+- "任务失败
+- 
+- - 任务：`a7f3e796-2b71-4563-9c0b-cb2bee227b99`
+- - 事件：`a7f3e796-2b71-4563-9c0b-cb2bee227b99:terminal:1`
+- - 退出码：1"
++ "{"version":1,"event_id":"a7f3e796-2b71-4563-9c0b-cb2bee227b99:terminal:1","task_id":"a7f3e796-2b71-4563-9c0b-cb2bee227b99","state":"failed","exit_code":1,"error_code":null}"
+
+- Expected  - 5
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:298:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:3)
+(fail) notifier omits unallowlisted error_code from markdown and still stores structured payload [20.61ms]
+
+ 0 pass
+ 19 filtered out
+ 9 fail
+ 13 expect() calls
+Ran 9 tests across 1 file. [6.29s]

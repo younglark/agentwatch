@@ -1,0 +1,15 @@
+{
+  "time_asia_shanghai": "2026-11-20 23:43:36 CST",
+  "live_test_processes": [],
+  "compiled_src_restored": true,
+  "this_turn_temp_dirs_cleaned_by_tests": true,
+  "preexisting_stale_tmp_dirs_no_process": [
+    "/tmp/aw-auth-boundary-Nto1KQ",
+    "/tmp/aw-auth-boundary-xI7191",
+    "/tmp/aw-core-LFVOLp",
+    "/tmp/aw-notice-budget-sgrnfm",
+    "/tmp/aw-notice-migration-GKRUA6",
+    "/tmp/aw-spec-review-CHVFJw"
+  ],
+  "note": "No agentwatch/test-host/bun test processes remained after the suite. Stale /tmp/aw-* dirs are from earlier sessions (20:42-22:11 CST), not this turn; left untouched."
+}

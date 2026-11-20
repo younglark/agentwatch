@@ -1,6 +1,6 @@
 import { test, expect, spyOn } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync,chmodSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync,chmodSync,realpathSync } from 'node:fs';
+import { tmpdir,hostname } from 'node:os';
 import { join } from 'node:path';
 import { openStorage } from '../src/storage.ts';
 
@@ -270,16 +270,186 @@ test('notification migration preserves legacy pending and never invents durable 
 // The engine seam is where deterministic local pre-dispatch failures are injected.
 // HTTP errors, including a server's rpc_dispatched:false, never produce this result.
 for(const retryable of [false,true])test(`notification locally proven not dispatched retryable=${retryable} preserves fixed budget`,async()=>{
-  const state=mkdtempSync(join(tmpdir(),'aw-notice-budget-')),db=await openStorage(state),attempts:{id:string;at:number}[]=[];
+  const state=mkdtempSync(join(tmpdir(),'aw-notice-budget-')),db=await openStorage(state),attempts:{id:string;at:number;body:string}[]=[];
   const engine=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:fixtureExecutor,notifications:{available:()=>true,send:async(input)=>{
-    const claimed=await db.store.notification(JSON.parse(input.body).task_id);expect(claimed?.state).toBe('inflight');expect(claimed?.attempts).toBe(attempts.length+1);
-    attempts.push({id:input.message_id,at:Date.now()});return retryable?{state:'pending',code:'RETRY_NOT_DISPATCHED'}:{state:'not_dispatched',code:'NOT_DISPATCHED'};
+    const claimed=await db.store.notification((await db.store.outbox())[0]!.task_id);expect(claimed?.state).toBe('inflight');expect(claimed?.attempts).toBe(attempts.length+1);
+    attempts.push({id:input.message_id,at:Date.now(),body:input.body});return retryable?{state:'pending',code:'RETRY_NOT_DISPATCHED'}:{state:'not_dispatched',code:'NOT_DISPATCHED'};
   }}});
   try{
     const task=await engine.run({request_id:'budget-'+retryable,bot:'test-bot',cwd:state,argv:['claude']});await engine.wait(task.id,5000);
     const end=Date.now()+2500;let result=await engine.status(task.id);
     while(result.notification.state!=='not_dispatched'&&Date.now()<end){await new Promise(r=>setTimeout(r,25));result=await engine.status(task.id);}
     expect(result.state).toBe('succeeded');expect(result.notification).toMatchObject({state:'not_dispatched',attempts:retryable?3:1,durability:'unverified'});expect(attempts).toHaveLength(retryable?3:1);expect(new Set(attempts.map(a=>a.id)).size).toBe(1);
+    for(const attempt of attempts){expect(()=>JSON.parse(attempt.body)).toThrow();expect(attempt.body).not.toContain('SECRET_');expect(attempt.body).not.toMatch(/^- (argv|cwd|request_id)/m);}
     if(retryable){expect(attempts[1]!.at-attempts[0]!.at).toBeGreaterThanOrEqual(250);expect(attempts[2]!.at-attempts[1]!.at).toBeGreaterThanOrEqual(500);}
   }finally{await engine.close();await db.close();rmSync(state,{recursive:true,force:true});}
+});
+
+
+import { createNotifier,inlineCode,notificationText,quoteState } from '../src/notifications.ts';
+const noticeTitles={succeeded:'任务已成功',failed:'任务失败',cancelled:'任务已取消',unknown:'任务状态未知'} as const;
+function fenceFor(text:string){
+  let longest=2,run=0;
+  for(const ch of text){if(ch==='`'){run++;if(run>longest)longest=run;}else run=0;}
+  return '`'.repeat(longest+1);
+}
+function wrapFence(text:string){
+  const fence=fenceFor(text);
+  return `${fence}\n${text.endsWith('\n')?text:text+'\n'}${fence}`;
+}
+function expectedStream(name:'stdout'|'stderr',data:Buffer,task_id:string,state:string,host:string){
+  const lines=[`## ${name}`,''];
+  if(data.length===0){lines.push('（无输出）');return lines.join('\n');}
+  if(data.length<=4096){lines.push(wrapFence(data.toString('utf8')));return lines.join('\n');}
+  const head=data.subarray(0,2048).toString('utf8'),tail=data.subarray(data.length-2048).toString('utf8');
+  const platform=process.platform,shell=platform==='win32'?'PowerShell':'POSIX shell';
+  lines.push(wrapFence(head),'',`（已省略 ${data.length-4096} 字节）`,'',wrapFence(tail),'');
+  lines.push(`完整输出请在任务运行主机 ${inlineCode(host)} 上查询（换机器后下面的路径和 --state 都不可用）。`,'');
+  lines.push(`- 文件：${inlineCode(join(state,task_id+'.'+name))}`);
+  lines.push(`- 命令（${shell}）：${inlineCode(`agentwatch logs ${task_id} --stream ${name} --offset 0 --limit 65536 --state ${quoteState(state,platform)}`)}`);
+  lines.push('','若返回的 data.truncated 为 true，把 --offset 改成这次的 data.next_offset，直到 truncated 为 false。');
+  return lines.join('\n');
+}
+
+function expectedNotice(state:keyof typeof noticeTitles,task_id:string,exit_code:number|null,error_code:string|null=null,outputs:{stdout?:Buffer;stderr?:Buffer;state:string}|{state:string;stdout?:Buffer;stderr?:Buffer}={state:''}){
+  const lines=[noticeTitles[state],'',`- 任务：\`${task_id}\``,`- 事件：\`${task_id}:terminal:1\``,`- 退出码：${exit_code}`];
+  if(error_code)lines.push(`- 错误：${error_code}`);
+  const dir=outputs.state;
+  const host=hostname();
+  return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+}
+function expectBoundedMarkdown(body:string,expected:string){
+  expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+  expect(body).not.toContain('SECRET_ARGV');expect(body).not.toMatch(/^- (argv|cwd|request_id)/m);
+}
+async function captureNotice(terminal:keyof typeof noticeTitles,exit_code:number|null,error_code:string|null,logs?:{stdout?:Buffer|string;stderr?:Buffer|string}){
+  const state=mkdtempSync(join(tmpdir(),'aw-notice-md-'));chmodSync(state,0o700);
+  const db=await openStorage(state);let body:string|undefined;
+  const notifier=createNotifier(db.store,{available:()=>true,send:async input=>{body=input.body;return {state:'accepted',code:'SEND_ACCEPTED'};}},state);
+  try{
+    const task=await db.store.submit({request_id:'notice-md',bot:'test-bot',cwd:state,argv:['claude','SECRET_ARGV']});
+    if(logs?.stdout!==undefined)writeFileSync(join(state,task.id+'.stdout'),logs.stdout,{mode:0o600});
+    if(logs?.stderr!==undefined)writeFileSync(join(state,task.id+'.stderr'),logs.stderr,{mode:0o600});
+    await db.store.finish(task.id,terminal,exit_code,error_code);
+    notifier.kick();const end=Date.now()+2000;while(body===undefined&&Date.now()<end)await new Promise(r=>setTimeout(r,10));
+    if(body===undefined)throw new Error('notification was not sent');
+    return {body,task,state:realpathSync(state),payload:JSON.parse((await db.store.outbox())[0]!.payload)};
+  }finally{await notifier.drain();await db.close();rmSync(state,{recursive:true,force:true});}
+}
+for(const [state,exit_code,error_code] of [['succeeded',0,null],['failed',7,null],['failed',1,'BOT_FORBIDDEN'],['failed',null,'SPAWN_FAILED'],['cancelled',null,null],['unknown',null,'OBSERVATION_LOST']] as const)
+  test(`notifier sends bounded markdown for ${state} exit=${exit_code} error=${error_code??'omitted'}`,async()=>{
+    const {body,task,state:dir,payload}=await captureNotice(state,exit_code,error_code);
+    expectBoundedMarkdown(body,expectedNotice(state,task.id,exit_code,error_code,{state:dir}));
+    expect(body).toContain('（无输出）');expect(body).not.toContain('agentwatch logs');expect(body).not.toContain(hostname());
+    expect(Object.keys(payload)).toEqual(['version','event_id','task_id','state','exit_code','error_code']);
+    expect(payload).toMatchObject({version:1,event_id:task.id+':terminal:1',task_id:task.id,state,exit_code,error_code});
+  });
+test('notifier omits unallowlisted error_code from markdown and still stores structured payload',async()=>{
+  const {body,task,state,payload}=await captureNotice('failed',1,'SECRET_ERROR');
+  expectBoundedMarkdown(body,expectedNotice('failed',task.id,1,null,{state}));
+  expect(body).not.toContain('错误');expect(payload).toMatchObject({state:'failed',exit_code:1,error_code:'SECRET_ERROR'});
+});
+test('notifier attaches short raw stdout and stderr without a query guide',async()=>{
+  const stdout=Buffer.from('ok line\n'),stderr=Buffer.from('warn');
+  const {body,task,state}=await captureNotice('succeeded',0,null,{stdout,stderr});
+  expectBoundedMarkdown(body,expectedNotice('succeeded',task.id,0,null,{state,stdout,stderr}));
+  expect(body).not.toContain('（无输出）');expect(body).not.toContain('已省略');expect(body).not.toContain('agentwatch logs');expect(body).not.toContain(hostname());
+  expect(body).not.toContain(join(state,task.id+'.stdout'));
+});
+test('notifier writes 无输出 for empty streams and does not add a query guide',async()=>{
+  const {body,task,state}=await captureNotice('succeeded',0,null,{stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)});
+  expectBoundedMarkdown(body,expectedNotice('succeeded',task.id,0,null,{state,stdout:Buffer.alloc(0),stderr:Buffer.alloc(0)}));
+  expect(body).toContain('## stdout\n\n（无输出）');expect(body).toContain('## stderr\n\n（无输出）');
+  expect(body).not.toContain('agentwatch logs');expect(body).not.toContain('```');
+});
+test('notifier truncates a long stream to 4KiB head and tail with host path and logs command',async()=>{
+  const stdout=Buffer.concat([Buffer.from('HEAD_START'),Buffer.alloc(8192-10-8,0x41),Buffer.from('END_TAIL')]);
+  const {body,task,state}=await captureNotice('succeeded',0,null,{stdout});
+  expectBoundedMarkdown(body,expectedNotice('succeeded',task.id,0,null,{state,stdout}));
+  expect(body).toContain('HEAD_START');expect(body).toContain('END_TAIL');expect(body).toContain('（已省略 4096 字节）');
+  expect(body).toContain('`'+hostname()+'`');expect(body).toContain('`'+join(state,task.id+'.stdout')+'`');
+  expect(body).toContain('`agentwatch logs '+task.id+' --stream stdout --offset 0 --limit 65536 --state '+quoteState(state)+'`');
+  expect(body).toContain('data.truncated');expect(body).toContain('next_offset');
+  expect(body).not.toContain('--stream stderr');expect(body).not.toContain('cat ');
+});
+test('notifier truncates stdout and stderr independently',async()=>{
+  const stdout=Buffer.concat([Buffer.from('OUT_HEAD'),Buffer.alloc(5000,0x42),Buffer.from('OUT_TAIL')]);
+  const stderr=Buffer.from('short-err\n');
+  const {body,task,state}=await captureNotice('failed',7,null,{stdout,stderr});
+  expectBoundedMarkdown(body,expectedNotice('failed',task.id,7,null,{state,stdout,stderr}));
+  expect(body).toContain('OUT_HEAD');expect(body).toContain('OUT_TAIL');expect(body).toContain('short-err');
+  expect(body).toContain('--stream stdout');expect(body).not.toContain('--stream stderr');
+  expect(body).toContain(join(state,task.id+'.stdout'));expect(body).not.toContain(join(state,task.id+'.stderr'));
+  expect(body).not.toContain('（已省略 '+(stderr.length)+' 字节）');
+  const both=Buffer.concat([Buffer.from('E_HEAD'),Buffer.alloc(6000,0x43),Buffer.from('E_TAIL')]);
+  const again=await captureNotice('failed',1,'SPAWN_FAILED',{stdout:Buffer.from('ok\n'),stderr:both});
+  expectBoundedMarkdown(again.body,expectedNotice('failed',again.task.id,1,'SPAWN_FAILED',{state:again.state,stdout:Buffer.from('ok\n'),stderr:both}));
+  expect(again.body).toContain('--stream stderr');expect(again.body).not.toContain('--stream stdout');
+  expect(again.body).toContain(join(again.state,again.task.id+'.stderr'));expect(again.body).not.toContain(join(again.state,again.task.id+'.stdout'));
+});
+test('notifier lengthens code fences when output contains backticks',async()=>{
+  const stdout=Buffer.from('before\n```\ninner\n````\nafter\n');
+  const {body,task,state}=await captureNotice('succeeded',0,null,{stdout});
+  expectBoundedMarkdown(body,expectedNotice('succeeded',task.id,0,null,{state,stdout}));
+  expect(body).toContain('`````\nbefore\n```\ninner\n````\nafter\n`````');
+  expect(body).not.toContain('agentwatch logs');
+});
+test('notifier includes raw log bytes and never adds request argv or secrets',async()=>{
+  const stdout=Buffer.from('visible output SECRET_IN_LOG\n');
+  const {body,task,state}=await captureNotice('succeeded',0,null,{stdout});
+  expectBoundedMarkdown(body,expectedNotice('succeeded',task.id,0,null,{state,stdout}));
+  expect(body).toContain('SECRET_IN_LOG');expect(body).not.toContain('SECRET_ARGV');expect(body).not.toContain('notice-md');
+});
+
+test('notifier distinguishes read failure from missing or empty logs without leaking native errors',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-notice-md-'));chmodSync(state,0o700);
+  const db=await openStorage(state);let body:string|undefined;
+  const notifier=createNotifier(db.store,{available:()=>true,send:async input=>{body=input.body;return {state:'accepted',code:'SEND_ACCEPTED'};}},state);
+  try{
+    const task=await db.store.submit({request_id:'notice-md',bot:'test-bot',cwd:state,argv:['claude','SECRET_ARGV']});
+    writeFileSync(join(state,task.id+'.stdout'),'SECRET_UNREADABLE_LOG\n',{mode:0o600});
+    chmodSync(join(state,task.id+'.stdout'),0o644);
+    await db.store.finish(task.id,'failed',1,'SPAWN_FAILED');
+    notifier.kick();const end=Date.now()+2000;while(body===undefined&&Date.now()<end)await new Promise(r=>setTimeout(r,10));
+    if(body===undefined)throw new Error('notification was not sent');
+    const dir=realpathSync(state),path=join(dir,task.id+'.stdout');
+    expect(body).toContain('输出读取失败，无法生成预览');
+    expect(body).not.toMatch(/## stdout\n\n（无输出）/);
+    expect(body).toContain('## stderr\n\n（无输出）');
+    expect(body).toContain(path);
+    expect(body).toContain('agentwatch logs '+task.id+' --stream stdout --offset 0 --limit 65536 --state ');
+    expect(body).not.toContain('--stream stderr');
+    expect(body).toContain(hostname());
+    expect(body).toContain('data.truncated');expect(body).toContain('next_offset');
+    expect(body).not.toContain('SECRET_UNREADABLE_LOG');
+    expect(body).not.toContain('SECRET_ARGV');
+    expect(body).not.toContain('Unsafe');expect(body).not.toContain('IPC_AUTH');
+    expect(body).not.toContain('EACCES');expect(body).not.toContain('EPERM');
+    expect(body).not.toMatch(/errno/i);expect(body).not.toContain('rejected');
+    expect(body).not.toContain('CoreError');expect(body).not.toMatch(/at \S+\.(ts|js):\d+/);
+  }finally{await notifier.drain();await db.close();rmSync(state,{recursive:true,force:true});}
+});
+test('notificationText does not break inline code when state or hostname contains backticks',()=>{
+  const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const dir='/tmp/aw-`state';
+  const body=notificationText({state:'succeeded',task_id:id,event_id:id+':terminal:1',exit_code:0,error_code:null,hostname:'host`name',state_dir:dir,stdout:{size:5000,head:Buffer.alloc(2048,0x41),tail:Buffer.alloc(2048,0x42)},stderr:{size:0,head:Buffer.alloc(0)}});
+  const path=join(dir,id+'.stdout');
+  expect(body).not.toContain('`'+path+'`');
+  expect(body).not.toContain('`host`name`');
+  expect(body).toContain('`` '+path+' ``');
+  expect(body).toContain('`` host`name ``');
+  expect(body).toContain("`` agentwatch logs "+id+" --stream stdout --offset 0 --limit 65536 --state '/tmp/aw-`state' ``");
+});
+test('logs query command is labeled for the actual platform and does not present POSIX quotes as cross-platform',()=>{
+  const id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const posix=notificationText({state:'succeeded',task_id:id,event_id:id+':terminal:1',exit_code:0,error_code:null,hostname:'host',state_dir:"/tmp/o're",stdout:{size:5000,head:Buffer.alloc(2048,0x41),tail:Buffer.alloc(2048,0x42)},stderr:{size:0,head:Buffer.alloc(0)},platform:'linux'});
+  expect(posix).toContain('命令（POSIX shell）：');
+  expect(posix).not.toContain('PowerShell');
+  expect(posix).toContain("`agentwatch logs "+id+" --stream stdout --offset 0 --limit 65536 --state '/tmp/o'\"'\"'re'`");
+  const win=notificationText({state:'succeeded',task_id:id,event_id:id+':terminal:1',exit_code:0,error_code:null,hostname:'WINHOST',state_dir:"C:\\Users\\O'Brien\\aw",stdout:{size:5000,head:Buffer.alloc(2048,0x41),tail:Buffer.alloc(2048,0x42)},stderr:{size:0,head:Buffer.alloc(0)},platform:'win32'});
+  expect(win).toContain('命令（PowerShell）：');
+  expect(win).not.toContain('POSIX');
+  expect(win).toContain("`agentwatch logs "+id+" --stream stdout --offset 0 --limit 65536 --state 'C:\\Users\\O''Brien\\aw'`");
+  expect(quoteState("C:\\Users\\O'Brien\\aw",'win32')).toBe("'C:\\Users\\O''Brien\\aw'");
+  expect(quoteState("/tmp/o're",'linux')).toBe("'/tmp/o'\"'\"'re'");
 });

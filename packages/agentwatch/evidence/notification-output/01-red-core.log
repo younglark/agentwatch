@@ -1,0 +1,446 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`ad0e6e3b-e140-4547-aa96-7a658394a2cb`
+  - 事件：`ad0e6e3b-e140-4547-aa96-7a658394a2cb:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：0"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for succeeded exit=0 error=omitted [52.94ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务失败
+  
+  - 任务：`4e5432a5-2137-4dba-bf5b-8f800f3f7fd0`
+  - 事件：`4e5432a5-2137-4dba-bf5b-8f800f3f7fd0:terminal:1`
+- - 退出码：7
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：7"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for failed exit=7 error=omitted [19.53ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务失败
+  
+  - 任务：`72286cc5-38c0-4410-b8c3-339a05e5cd62`
+  - 事件：`72286cc5-38c0-4410-b8c3-339a05e5cd62:terminal:1`
+  - 退出码：1
+- - 错误：BOT_FORBIDDEN
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 错误：BOT_FORBIDDEN"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for failed exit=1 error=BOT_FORBIDDEN [17.34ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务失败
+  
+  - 任务：`a266c150-1f18-4b7a-9f57-186e9520e019`
+  - 事件：`a266c150-1f18-4b7a-9f57-186e9520e019:terminal:1`
+  - 退出码：null
+- - 错误：SPAWN_FAILED
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 错误：SPAWN_FAILED"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for failed exit=null error=SPAWN_FAILED [17.31ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已取消
+  
+  - 任务：`ba9145e9-4c1e-4fd4-9c28-027d651968bc`
+  - 事件：`ba9145e9-4c1e-4fd4-9c28-027d651968bc:terminal:1`
+- - 退出码：null
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：null"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for cancelled exit=null error=omitted [19.09ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务状态未知
+  
+  - 任务：`d0b46c46-8eba-4bda-9b5d-5c41cac8d87f`
+  - 事件：`d0b46c46-8eba-4bda-9b5d-5c41cac8d87f:terminal:1`
+  - 退出码：null
+- - 错误：OBSERVATION_LOST
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 错误：OBSERVATION_LOST"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:341:5)
+(fail) notifier sends bounded markdown for unknown exit=null error=OBSERVATION_LOST [17.56ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务失败
+  
+  - 任务：`ac6fd2fc-51aa-47e6-9f43-48070e787030`
+  - 事件：`ac6fd2fc-51aa-47e6-9f43-48070e787030:terminal:1`
+- - 退出码：1
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：1"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:348:3)
+(fail) notifier omits unallowlisted error_code from markdown and still stores structured payload [17.80ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`46c8e0b6-0923-47d7-85be-195b6eeaaff1`
+  - 事件：`46c8e0b6-0923-47d7-85be-195b6eeaaff1:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- ```
+- ok line
+- ```
+- 
+- ## stderr
+- 
+- ```
+- warn
+- ```"
++ - 退出码：0"
+
+- Expected  - 13
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:354:3)
+(fail) notifier attaches short raw stdout and stderr without a query guide [20.68ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`28fef859-8749-4d9a-8fa3-4c7ca6585ea5`
+  - 事件：`28fef859-8749-4d9a-8fa3-4c7ca6585ea5:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- （无输出）
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：0"
+
+- Expected  - 9
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:360:3)
+(fail) notifier writes 无输出 for empty streams and does not add a query guide [18.05ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`694ae5db-db6b-4b83-a0a6-b1116a137264`
+  - 事件：`694ae5db-db6b-4b83-a0a6-b1116a137264:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- ```
+- HEAD_STARTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+- ```
+- 
+- （已省略 4096 字节）
+- 
+- ```
+- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEND_TAIL
+- ```
+- 
+- 完整输出请在任务运行主机 `grok-bot-vm-162271303` 上查询（换机器后下面的路径和 --state 都不可用）。
+- 
+- - 文件：`/tmp/aw-notice-md-A1uS6F/694ae5db-db6b-4b83-a0a6-b1116a137264.stdout`
+- - 命令：`agentwatch logs 694ae5db-db6b-4b83-a0a6-b1116a137264 --stream stdout --offset 0 --limit 65536 --state '/tmp/aw-notice-md-A1uS6F'`
+- 
+- 若返回的 data.truncated 为 true，把 --offset 改成这次的 data.next_offset，直到 truncated 为 false。
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：0"
+
+- Expected  - 24
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:367:3)
+(fail) notifier truncates a long stream to 4KiB head and tail with host path and logs command [19.58ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务失败
+  
+  - 任务：`8f6f29c6-97c4-4e4d-99a2-b4bb134d01b8`
+  - 事件：`8f6f29c6-97c4-4e4d-99a2-b4bb134d01b8:terminal:1`
+- - 退出码：7
+- 
+- ## stdout
+- 
+- ```
+- OUT_HEADBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+- ```
+- 
+- （已省略 920 字节）
+- 
+- ```
+- BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBOUT_TAIL
+- ```
+- 
+- 完整输出请在任务运行主机 `grok-bot-vm-162271303` 上查询（换机器后下面的路径和 --state 都不可用）。
+- 
+- - 文件：`/tmp/aw-notice-md-U49zjY/8f6f29c6-97c4-4e4d-99a2-b4bb134d01b8.stdout`
+- - 命令：`agentwatch logs 8f6f29c6-97c4-4e4d-99a2-b4bb134d01b8 --stream stdout --offset 0 --limit 65536 --state '/tmp/aw-notice-md-U49zjY'`
+- 
+- 若返回的 data.truncated 为 true，把 --offset 改成这次的 data.next_offset，直到 truncated 为 false。
+- 
+- ## stderr
+- 
+- ```
+- short-err
+- ```"
++ - 退出码：7"
+
+- Expected  - 26
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:378:3)
+(fail) notifier truncates stdout and stderr independently [21.68ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`891eea72-d8db-4dd9-9708-1593c940f560`
+  - 事件：`891eea72-d8db-4dd9-9708-1593c940f560:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- `````
+- before
+- ```
+- inner
+- ````
+- after
+- `````
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：0"
+
+- Expected  - 15
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:392:3)
+(fail) notifier lengthens code fences when output contains backticks [19.63ms]
+316 |   const dir=outputs.state;
+317 |   const host=hostname();
+318 |   return [lines.join('\n'),expectedStream('stdout',outputs.stdout??Buffer.alloc(0),task_id,dir,host),expectedStream('stderr',outputs.stderr??Buffer.alloc(0),task_id,dir,host)].join('\n\n');
+319 | }
+320 | function expectBoundedMarkdown(body:string,expected:string){
+321 |   expect(body).toBe(expected);expect(()=>JSON.parse(body)).toThrow();
+                     ^
+error: expect(received).toBe(expected)
+
+  "任务已成功
+  
+  - 任务：`c601876c-ead7-4599-a229-42bed713623c`
+  - 事件：`c601876c-ead7-4599-a229-42bed713623c:terminal:1`
+- - 退出码：0
+- 
+- ## stdout
+- 
+- ```
+- visible output SECRET_IN_LOG
+- ```
+- 
+- ## stderr
+- 
+- （无输出）"
++ - 退出码：0"
+
+- Expected  - 11
++ Received  + 1
+
+      at expectBoundedMarkdown (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:321:16)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:399:3)
+(fail) notifier includes raw log bytes and never adds request argv or secrets [18.19ms]
+
+ 0 pass
+ 21 filtered out
+ 13 fail
+ 13 expect() calls
+Ran 13 tests across 1 file. [402.00ms]

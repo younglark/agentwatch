@@ -1,0 +1,5 @@
+typecheck: pass (tsc6 --noEmit), 2.74s
+source tests: 215 pass / 0 fail, 1677 expects, 98.08s
+compiled tests: 74 pass / 0 fail, 586 expects, 38.55s
+red: 01-red-core.log
+green: 02-green-core.log, 02-green-contracts.log

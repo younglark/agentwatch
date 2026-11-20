@@ -1,7 +1,11 @@
 import { Schema } from 'effect';
+import { closeSync,fstatSync,readSync,realpathSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { resolve } from 'node:path';
 import { connectReady,connectRpc } from './connect-client.ts';
 import { CoreError } from './domain.ts';
 import { exitCodes,terminalStates } from './domain.ts';
+import { openLogFile,taskLogFile } from './log-files.ts';
 import { type Store,type NotificationRecord } from './storage.ts';
 export interface NoticeInput {message_id:string;bot:string;body:string;attempts:number}
 export interface NoticeResult {state:'accepted'|'rejected'|'not_dispatched'|'unknown'|'pending';code:string;receipt?:Record<string,unknown>;next_attempt_at?:number}
@@ -51,14 +55,79 @@ export const connectNotifications:NotificationTransport={
     return {state:'unknown',code:'STATUS_UNCERTAIN'};
   },
 };
-function inputFor(row:NotificationRecord & {request:string}):NoticeInput {
-  const request=JSON.parse(row.request),payload=JSON.parse(row.payload);
-  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(row.task_id)||row.event_id!==row.task_id+':terminal:1'||!terminalStates.includes(row.terminal as typeof terminalStates[number])||!row.message_id||typeof request.bot!=='string'||!request.bot||request.bot.length>256||request.bot.includes('\0'))throw new Error('Invalid notification');
-  // Frozen result fields only: never send argv, cwd, logs, native errors or a report file.
-  const error=typeof payload.error_code==='string'&&(Object.hasOwn(exitCodes,payload.error_code)||['OBSERVATION_LOST','SPAWN_FAILED'].includes(payload.error_code))?payload.error_code:null;
-  return {attempts:row.attempts,message_id:row.message_id,bot:request.bot,body:JSON.stringify({version:1,event_id:row.event_id,task_id:row.task_id,state:row.terminal,exit_code:Number.isSafeInteger(payload.exit_code)?payload.exit_code:null,error_code:error})};
+const noticeTitles={succeeded:'任务已成功',failed:'任务失败',cancelled:'任务已取消',unknown:'任务状态未知'} as const;
+export const OUTPUT_PREVIEW_BYTES=4096;
+const OUTPUT_HALF=OUTPUT_PREVIEW_BYTES/2;
+export function fenceFor(text:string){
+  let longest=2,run=0;
+  for(const ch of text){if(ch==='`'){run++;if(run>longest)longest=run;}else run=0;}
+  return '`'.repeat(longest+1);
 }
-export function createNotifier(store:Store,transport:NotificationTransport,onError?:(error:unknown)=>void){
+function wrapFence(text:string){
+  const fence=fenceFor(text);
+  return `${fence}\n${text.endsWith('\n')?text:text+'\n'}${fence}`;
+}
+export function inlineCode(text:string){
+  let longest=0,run=0;
+  for(const ch of text){if(ch==='`'){run++;if(run>longest)longest=run;}else run=0;}
+  const fence='`'.repeat(longest+1);
+  if(longest===0&&!text.startsWith(' ')&&!text.endsWith(' '))return '`'+text+'`';
+  return `${fence} ${text} ${fence}`;
+}
+export function quoteState(state:string,platform:string=process.platform){
+  if(platform==='win32')return `'${state.replace(/'/g,"''")}'`;
+  return `'${state.replace(/'/g,"'\"'\"'")}'`;
+}
+function shellLabel(platform:string){return platform==='win32'?'PowerShell':'POSIX shell';}
+function absoluteState(state:string){try{return realpathSync(state);}catch{return resolve(state);}}
+type StreamPreview={size:number;head:Buffer;tail?:Buffer;failed?:boolean};
+function readStream(state:string,id:string,stream:'stdout'|'stderr'):StreamPreview {
+  try{
+    const fd=openLogFile(taskLogFile(state,id,stream),'read');
+    if(fd===undefined)return {size:0,head:Buffer.alloc(0)};
+    try{
+      const size=fstatSync(fd).size;if(size<=0)return {size:0,head:Buffer.alloc(0)};
+      if(size<=OUTPUT_PREVIEW_BYTES){
+        const head=Buffer.alloc(size);return {size,head:head.subarray(0,readSync(fd,head,0,size,0))};
+      }
+      const head=Buffer.alloc(OUTPUT_HALF),tail=Buffer.alloc(OUTPUT_HALF);
+      readSync(fd,head,0,OUTPUT_HALF,0);readSync(fd,tail,0,OUTPUT_HALF,size-OUTPUT_HALF);
+      return {size,head,tail};
+    }finally{closeSync(fd);}
+  }catch{return {size:0,head:Buffer.alloc(0),failed:true};}
+}
+function queryGuide(name:'stdout'|'stderr',task_id:string,state:string,host:string,platform:string){
+  return [
+    `完整输出请在任务运行主机 ${inlineCode(host)} 上查询（换机器后下面的路径和 --state 都不可用）。`,'',
+    `- 文件：${inlineCode(taskLogFile(state,task_id,name))}`,
+    `- 命令（${shellLabel(platform)}）：${inlineCode(`agentwatch logs ${task_id} --stream ${name} --offset 0 --limit 65536 --state ${quoteState(state,platform)}`)}`,'',
+    '若返回的 data.truncated 为 true，把 --offset 改成这次的 data.next_offset，直到 truncated 为 false。',
+  ];
+}
+function formatStream(name:'stdout'|'stderr',data:StreamPreview,task_id:string,state:string,host:string,platform:string){
+  const lines=[`## ${name}`,''];
+  if(data.failed){lines.push('输出读取失败，无法生成预览。','',...queryGuide(name,task_id,state,host,platform));return lines.join('\n');}
+  if(data.size===0){lines.push('（无输出）');return lines.join('\n');}
+  if(!data.tail){lines.push(wrapFence(data.head.toString('utf8')));return lines.join('\n');}
+  lines.push(wrapFence(data.head.toString('utf8')),'',`（已省略 ${data.size-OUTPUT_PREVIEW_BYTES} 字节）`,'',wrapFence(data.tail.toString('utf8')),'',...queryGuide(name,task_id,state,host,platform));
+  return lines.join('\n');
+}
+export function notificationText(input:{state:typeof terminalStates[number];task_id:string;event_id:string;exit_code:number|null;error_code:string|null;hostname:string;state_dir:string;stdout:StreamPreview;stderr:StreamPreview;platform?:string}){
+  const platform=input.platform??process.platform;
+  const lines=[noticeTitles[input.state],'',`- 任务：\`${input.task_id}\``,`- 事件：\`${input.event_id}\``,`- 退出码：${input.exit_code}`];
+  if(input.error_code)lines.push(`- 错误：${input.error_code}`);
+  return [lines.join('\n'),formatStream('stdout',input.stdout,input.task_id,input.state_dir,input.hostname,platform),formatStream('stderr',input.stderr,input.task_id,input.state_dir,input.hostname,platform)].join('\n\n');
+}
+function inputFor(row:NotificationRecord & {request:string},state:string):NoticeInput {
+  const request=JSON.parse(row.request),payload=JSON.parse(row.payload);
+  const terminal=terminalStates.find(value=>value===row.terminal);
+  if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(row.task_id)||row.event_id!==row.task_id+':terminal:1'||!terminal||!row.message_id||typeof request.bot!=='string'||!request.bot||request.bot.length>256||request.bot.includes('\0'))throw new Error('Invalid notification');
+  // Frozen result fields plus a bounded raw stdout/stderr preview. Never send argv, cwd, request_id, native errors or a report file.
+  const error=typeof payload.error_code==='string'&&(Object.hasOwn(exitCodes,payload.error_code)||['OBSERVATION_LOST','SPAWN_FAILED'].includes(payload.error_code))?payload.error_code:null;
+  const dir=absoluteState(state);
+  return {attempts:row.attempts,message_id:row.message_id,bot:request.bot,body:notificationText({state:terminal,task_id:row.task_id,event_id:row.event_id,exit_code:Number.isSafeInteger(payload.exit_code)?payload.exit_code:null,error_code:error,hostname:hostname(),state_dir:dir,stdout:readStream(dir,row.task_id,'stdout'),stderr:readStream(dir,row.task_id,'stderr')})};
+}
+export function createNotifier(store:Store,transport:NotificationTransport,state:string,onError?:(error:unknown)=>void){
   let stopped=false,active:Promise<void>|undefined,controller:AbortController|undefined;
   async function work(){
     if(!transport.available())return;
@@ -66,14 +135,14 @@ export function createNotifier(store:Store,transport:NotificationTransport,onErr
     const row=pending??(transport.reconcile?await store.claimReconciliation():undefined);if(!row)return;
     controller=new AbortController();if(stopped)controller.abort();
     if(pending){
-      let result:NoticeResult;try{result=await transport.send(inputFor(row),controller.signal);}catch{result=unknown();}
+      let result:NoticeResult;try{result=await transport.send(inputFor(row,state),controller.signal);}catch{result=unknown();}
       if(result.state==='pending'&&result.code==='RETRY_NOT_DISPATCHED')result=row.attempts>=3
         ?{state:'not_dispatched',code:'NOT_DISPATCHED'}
         :{...result,next_attempt_at:Date.now()+250*2**(row.attempts-1)};
       await store.completeNotification(row.event_id,result);
     }else{
       let result:NoticeResult & {state:'accepted'|'rejected'|'unknown'};
-      try{result=await transport.reconcile!(inputFor(row),controller.signal);}catch{result={state:'unknown',code:'STATUS_UNCERTAIN'};}
+      try{result=await transport.reconcile!(inputFor(row,state),controller.signal);}catch{result={state:'unknown',code:'STATUS_UNCERTAIN'};}
       await store.completeReconciliation(row.event_id,result);
     }
   }

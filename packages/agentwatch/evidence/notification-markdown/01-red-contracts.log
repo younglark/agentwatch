@@ -1,0 +1,31 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+135 |     const run=await h.call('run',args);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+136 |     const accepted=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
+137 |     expect(accepted.value.data.state).toBe('succeeded');expect(accepted.value.data.notification).toMatchObject({transport:'connect_http',attempts:1,durability:'unverified',needs_reconciliation:false,receipt:{delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:'workflow-fixture'}});
+138 |     const sent=h.calls.filter(c=>c.method==='SendGrokBotUserMessage');expect(sent).toHaveLength(1);expect(Object.keys(sent[0]!.body)).toEqual(['agentId','messageId','sessionId','text','sentAtMs']);expect(sent[0]!.body).toMatchObject({agentId:'test-bot',messageId:accepted.value.data.notification.message_id,sessionId:''});expect(sent[0]!.body.sentAtMs).toMatch(/^\d{13}$/);
+139 |     const body=readFileSync(join(h.root,'notification-body'),'utf8');
+140 |     expect(body).toBe(['任务已成功','',`- 任务：\`${id}\``,`- 事件：\`${id}:terminal:1\``,'- 退出码：0'].join('\n'));
+                       ^
+error: expect(received).toBe(expected)
+
+- "任务已成功
+- 
+- - 任务：`91cdfdca-550e-4e73-a7b9-c5822630d2f1`
+- - 事件：`91cdfdca-550e-4e73-a7b9-c5822630d2f1:terminal:1`
+- - 退出码：0"
++ "{"version":1,"event_id":"91cdfdca-550e-4e73-a7b9-c5822630d2f1:terminal:1","task_id":"91cdfdca-550e-4e73-a7b9-c5822630d2f1","state":"succeeded","exit_code":0,"error_code":null}"
+
+- Expected  - 5
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:140:18)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: direct notification acceptance persists once with frozen bounded request fields [975.65ms]
+
+ 0 pass
+ 75 filtered out
+ 1 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [1286.00ms]

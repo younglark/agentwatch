@@ -176,9 +176,26 @@ JSON；非 200 的 JSON `code` 错误只用受控码、不回显原始 body。�
   protobuf JSON 十进制字符串发送。空 sessionId 沿用参考请求的默认未报告会话，不猜 ID。
 - `GetGrokBotSendStatus`：`agentId,messageId,sessionId:""`，仅 unknown 时最多一次只读对账。
 
-text 只有冻结的有界 JSON 六字段：version、event_id、task_id、state、exit_code、error_code。
-不发送 argv、cwd、request_id、日志全文、原始异常、token、report 文件或总结。通知失败
-不改任务结果，wait 只等待任务终结。
+发给目标 bot 的默认终态通知 text 是便于阅读的 Markdown。开头仍是简体中文标题与既有
+有界字段：state、task_id、event_id、exit_code，以及非空的 error_code（空则省略该行；
+succeeded=任务已成功、failed=任务失败、cancelled=任务已取消、unknown=任务状态未知）。
+随后分节附原始 stdout 和 stderr，不做各家 JSON 事件流专用解析，不脱敏。每路最多保留
+4 KiB（头尾合计，按字节截断）；超限时保留开头和结尾，中间写明省略字节数。空文件或缺失
+日志（含 spawn 前失败、可能尚未创建日志）保留小节标题并写「（无输出）」，不附查询说明。
+权限/IO 等读取失败不伪装成无输出，而是写「输出读取失败，无法生成预览」，并仍附本机路径
+与 `logs` 查询；正文不泄露原生 error、栈或 `IPC_AUTH` 文案。输出用可变长度 fenced
+code block 原样嵌入，内容含反引号时加长围栏；主机名、路径和命令用按内容加长的 Markdown
+行内代码，避免路径中的反引号拆破标记。该路被截断或读取失败时，附任务运行主机的操作系统
+主机名、该路日志文件的绝对路径（`<state>/<task_id>.stdout` 或 `.stderr`）以及仅针对
+当前平台的可运行命令：Linux/macOS 标注为 POSIX shell 并用 POSIX 单引号，Windows 标注为
+PowerShell 并用 PowerShell 单引号（`'` 写成 `''`），不把 POSIX 引号冒充为跨平台写法。
+命令形如
+`agentwatch logs <task_id> --stream stdout|stderr --offset 0 --limit 65536 --state <实际绝对state>`；
+并说明若返回 `truncated` 为 true，把 `--offset` 改成 `next_offset`。未截断的短输出不附
+查询说明。不以 cat 私有日志为官方入口，也不新增 logs
+参数。不发送 argv、cwd、request_id、原始异常、token、report 文件或总结；完整日志仍留本地。
+内部 outbox payload 仍以结构化 JSON 存储；CLI 的 run/status/logs/wait/cancel 默认仍是
+一行 JSON，`--json` 保持兼容。通知失败不改任务结果，wait 只等待任务终结。
 
 | 通知状态 | 只说明什么 |
 |---|---|
