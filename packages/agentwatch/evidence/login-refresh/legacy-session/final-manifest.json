@@ -1,0 +1,88 @@
+{
+  "verified_at": "2026-11-20T22:37:57.039804+08:00",
+  "zone": "Asia/Shanghai",
+  "head": "b52ba5e838930931e9ad93e96665cb80d99281cc",
+  "bun": "1.4.4",
+  "typecheck": "pass",
+  "source": {
+    "pass": 146,
+    "fail": 0,
+    "assertions": 1073,
+    "files": 6,
+    "seconds": 85.57
+  },
+  "compiled": {
+    "pass": 74,
+    "fail": 0,
+    "assertions": 578,
+    "seconds": 38.99
+  },
+  "build": "production and test-host pass",
+  "new_boundary_tests": 12,
+  "diff_check": "pass",
+  "cleanup": "cleanup-audit.json",
+  "artifacts": {
+    "dist/agentwatch": {
+      "bytes": 110008496,
+      "sha256": "13642977285976a329711a324d5ee0ced960a8f06bf4de30057387160722bd16"
+    },
+    "dist/test-host": {
+      "bytes": 109693104,
+      "sha256": "74d163acf69aa352d860a25d086eb8f6fea51d40976de8350356fbe8bcd5f4e8"
+    },
+    "src/auth/store.ts": {
+      "bytes": 12178,
+      "sha256": "67ee7a24d527ee4fc64a8e5fcd6380d817317250766f2a5eda9e7aa8f7d37fec"
+    },
+    "src/auth/session.ts": {
+      "bytes": 11124,
+      "sha256": "1b4debfc8a5e1c02c1982a9fdb0bec718ccfc968367cfa885c2ce7d4de7b122f"
+    },
+    "test/auth-legacy-session.test.ts": {
+      "bytes": 8512,
+      "sha256": "6ee7514916e2ae85dcb0e28ac4d30719d841dc864a7a42412220ff3c243654b7"
+    },
+    "test/auth-legacy-child.ts": {
+      "bytes": 495,
+      "sha256": "2a4eadd00be8aabe9cdf33212708b1162616ef9603e1869b0cf852f2b3cf33b5"
+    },
+    "package.json": {
+      "bytes": 1218,
+      "sha256": "38aec70f5f9db8987b8aebb6d46225adb5ef7a7567a18d5694d4f1c89935dddb"
+    },
+    "README.md": {
+      "bytes": 19517,
+      "sha256": "a3098377ededb739356698dfabd9352373083fde7da2e06b81f5c2891d5f7a5d"
+    },
+    "RESULTS.md": {
+      "bytes": 48141,
+      "sha256": "18234af7980d73394d885566e71baf4afb6f69c5dac3222b01b0f94ce426e724"
+    }
+  },
+  "changed_this_round": [
+    "src/auth/store.ts",
+    "src/auth/session.ts",
+    "test/auth-legacy-session.test.ts",
+    "test/auth-legacy-child.ts",
+    "package.json",
+    "README.md",
+    "RESULTS.md",
+    "evidence/login-refresh/legacy-session/"
+  ],
+  "commit": false,
+  "push": false,
+  "git_config_changed": false,
+  "live_backend_verified": false,
+  "native_windows_verified": false,
+  "native_macos_verified": false,
+  "limitations": [
+    "Ambiguous-exchange protection remains in-process only, 120 seconds, not persistent.",
+    "Another process or restart with an actually rotated old refresh token may receive invalid_grant and require login."
+  ],
+  "test_sequence": [
+    "01-red.log reproduces two independent sessions: one succeeds, one fails.",
+    "01-green.log is preliminary; full-suite subject-mismatch file-unchanged regression in 03-migration-write-regression.log led to abandoning eager credential writes.",
+    "02-baseline-sensitivity.log is AFTER initial red/green: six additional tests replayed against pre-fix load logic (not claimed as initial TDD red).",
+    "Final deterministic snapshot migration saves identity only on successful rotation. Final 12 boundaries and all suites pass."
+  ]
+}

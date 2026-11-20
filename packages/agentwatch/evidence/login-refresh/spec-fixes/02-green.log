@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [259.23ms]
+
+ 1 pass
+ 1 filtered out
+ 0 fail
+ 8 expect() calls
+Ran 1 test across 1 file. [369.00ms]

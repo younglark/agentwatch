@@ -1,0 +1,29 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth.test.ts:
+(pass) macOS login URL uses the cli preset and never includes the verifier or team param [0.48ms]
+(pass) injected darwin polls 404 then persists tokens, and stderr printing omits the verifier [12.56ms]
+(pass) injected darwin policy denial, xAI identity, timeout and consecutive poll errors fail closed [18.53ms]
+(pass) refresh rotates 300s early, persists the new pair, and keeps a still-valid token on network failure [7.48ms]
+(pass) expired token without client_id fails; valid token without client_id still works; client_id is never guessed from a JWT [1.46ms]
+(pass) shouldLogout does not fall back to the previous token, and a subject mismatch is refused [3.51ms]
+(pass) conflicting client id env vars fail closed and invalid_grant after an ambiguous timeout keeps credentials [2.66ms]
+(pass) write RPCs are not automatically replayed after a backend 401, even when refresh would succeed [3.85ms]
+(pass) Linux desktop reads a peanuts fixture, never refreshes, and macOS ignores sand-secrets overrides [3.94ms]
+(pass) independent credential reread after refresh is visible to the next request, and health never includes secrets [35.42ms]
+
+test/auth-boundaries.test.ts:
+(pass) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [2.61ms]
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [342.11ms]
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [7.31ms]
+(pass) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [347.16ms]
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [130.14ms]
+(pass) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [50.91ms]
+(pass) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [3.69ms]
+(pass) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [11.67ms]
+(pass) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [3025.21ms]
+
+ 19 pass
+ 0 fail
+ 186 expect() calls
+Ran 19 tests across 2 files. [4.15s]

@@ -1,0 +1,63 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-refresh-interleavings.test.ts:
+33 |   try{
+34 |     await pollReceived.promise;
+35 |     const pending=readFileSync(join(f.auth,'pending-login.json'),'utf8'),generation=readFileSync(join(f.auth,'login-generation.json'),'utf8');
+36 |     const old=createAuthSession({platform:'darwin',env:f.env});
+37 |     await old.getAccessToken().catch(()=>{});
+38 |     expect(existsSync(join(f.auth,'pending-login.json'))).toBe(true);
+                                                               ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:38:59)
+(fail) Recheck1 old refresh revoked preserves a newer pending login in another process [147.66ms]
+(pass) Recheck1 old refresh success preserves a newer pending login in another process [179.16ms]
+(pass) Recheck1 old refresh transient preserves a newer pending login in another process [175.73ms]
+57 |   const result=old.getAccessToken().then(()=>({resolved:true}),error=>({resolved:false,error}));
+58 |   let started:Promise<unknown>|undefined,completed:Promise<unknown>|undefined;
+59 |   try{
+60 |     await refreshReceived.promise;
+61 |     const newer=createAuthSession({platform:'darwin',env:f.env});
+62 |     started=newer.beginLogin();expect(await bounded(started)).toBeDefined();
+                                                                   ^
+error: expect(received).toBeDefined()
+
+Received: undefined
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:62:63)
+(fail) Recheck1 delayed old refresh revoked cannot overwrite or clear a completed new login [510.02ms]
+57 |   const result=old.getAccessToken().then(()=>({resolved:true}),error=>({resolved:false,error}));
+58 |   let started:Promise<unknown>|undefined,completed:Promise<unknown>|undefined;
+59 |   try{
+60 |     await refreshReceived.promise;
+61 |     const newer=createAuthSession({platform:'darwin',env:f.env});
+62 |     started=newer.beginLogin();expect(await bounded(started)).toBeDefined();
+                                                                   ^
+error: expect(received).toBeDefined()
+
+Received: undefined
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:62:63)
+(fail) Recheck1 delayed old refresh success cannot overwrite or clear a completed new login [508.52ms]
+57 |   const result=old.getAccessToken().then(()=>({resolved:true}),error=>({resolved:false,error}));
+58 |   let started:Promise<unknown>|undefined,completed:Promise<unknown>|undefined;
+59 |   try{
+60 |     await refreshReceived.promise;
+61 |     const newer=createAuthSession({platform:'darwin',env:f.env});
+62 |     started=newer.beginLogin();expect(await bounded(started)).toBeDefined();
+                                                                   ^
+error: expect(received).toBeDefined()
+
+Received: undefined
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:62:63)
+(fail) Recheck1 delayed old refresh transient cannot overwrite or clear a completed new login [510.87ms]
+
+ 2 pass
+ 4 fail
+ 20 expect() calls
+Ran 6 tests across 1 file. [2.17s]

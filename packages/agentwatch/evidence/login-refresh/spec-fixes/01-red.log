@@ -1,0 +1,18 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+146 |     }catch(error){
+147 |       if(error instanceof CoreError){last=error;continue;}
+148 |       throw error;
+149 |     }
+150 |   }
+151 |   throw last??authFailure(independentHint());
+                                                 ^
+error: Windows official credential decryption is unavailable on this host
+      at loadDesktopAccess (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/desktop.ts:151:44)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:33:12)
+(fail) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [1.92ms]
+
+ 0 pass
+ 1 fail
+Ran 1 test across 1 file. [104.00ms]

@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+87 |     setAuthPlatformForTests('darwin');
+88 |     host=await startDaemon(join(f.root,'state'));
+89 |     const child=Bun.spawn([process.execPath,resolve('test/auth-cli-child.ts'),'login','--state',join(f.root,'state')],{env:{...process.env},stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+90 |     const code=await Promise.race([child.exited,new Promise<number>(r=>setTimeout(()=>{child.kill();r(-1);},900))]);
+91 |     const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);
+92 |     expect(code).toBe(0);
+                      ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: -1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:92:18)
+(fail) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [949.76ms]
+
+ 0 pass
+ 3 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [1073.00ms]

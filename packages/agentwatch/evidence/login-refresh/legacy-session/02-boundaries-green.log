@@ -1,0 +1,14 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-legacy-session.test.ts:
+(pass) legacy credential without session_id: independent in-process sessions reuse one peer refresh [114.18ms]
+(pass) legacy credential without session_id: another Bun process reuses peer refresh with one exchange [293.76ms]
+(pass) waiting peer rejects real account instead of adopting a different session [106.55ms]
+(pass) waiting peer rejects real session instead of adopting a different session [105.21ms]
+(pass) waiting peer rejects real logout instead of adopting a different session [104.20ms]
+(pass) waiting peer rejects real logout-restored instead of adopting a different session [105.15ms]
+
+ 6 pass
+ 0 fail
+ 45 expect() calls
+Ran 6 tests across 1 file. [1013.00ms]

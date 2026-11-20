@@ -1,0 +1,6 @@
+{
+  "scope": "owned Bun/agentwatch test processes only",
+  "remaining_processes": [],
+  "src_restored": true,
+  "compiled_staging_absent": true
+}

@@ -1,0 +1,21 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [4.30ms]
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [278.35ms]
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [10.78ms]
+(pass) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [304.63ms]
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [126.59ms]
+(pass) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [49.07ms]
+(pass) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [3.13ms]
+(pass) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [11.57ms]
+(pass) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [3026.20ms]
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.33ms]
+(pass) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [0.59ms]
+(pass) Spec8 cancel during credential lock wait is prompt and does not destroy shared refresh ownership [27.81ms]
+(pass) Spec3/8 refresh revocation or uncertain notification never alters task success or replays a send [88.44ms]
+
+ 13 pass
+ 0 fail
+ 133 expect() calls
+Ran 13 tests across 1 file. [4.06s]

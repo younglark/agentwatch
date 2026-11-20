@@ -1,0 +1,25 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+160 |   const next=jwt({sub:'owner',exp:Math.floor(Date.now()/1000)+3600});
+161 |   const session=createAuthSession({platform:'darwin',env:f.env,fetch:asFetch(async()=>{calls++;await release.promise;return Response.json({access_token:next,refresh_token:'ROTATED_SECRET_RT'});})});
+162 |   try{
+163 |     const pre=new AbortController();pre.abort();
+164 |     const result=await Promise.race([session.getAccessToken(pre.signal).then(()=> 'resolved',()=> 'aborted'),new Promise<string>(r=>setTimeout(()=>r('hung'),100))]);
+165 |     expect(result).toBe('aborted');expect(calls).toBe(0);
+                         ^
+error: expect(received).toBe(expected)
+
+Expected: "aborted"
+Received: "hung"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:165:20)
+(fail) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [106.21ms]
+(fail) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [20008.93ms]
+  ^ this test timed out after 10000ms.
+
+ 0 pass
+ 7 filtered out
+ 2 fail
+ 3 expect() calls
+Ran 2 tests across 1 file. [20.24s]

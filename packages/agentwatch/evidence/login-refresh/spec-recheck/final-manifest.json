@@ -1,0 +1,44 @@
+{
+  "verified_at": "2026-11-20T22:27:30.562237+08:00",
+  "zone": "Asia/Shanghai",
+  "head": "b52ba5e838930931e9ad93e96665cb80d99281cc",
+  "bun": "1.4.4",
+  "typecheck": "pass",
+  "source": {
+    "pass": 134,
+    "fail": 0,
+    "assertions": 981,
+    "files": 5,
+    "seconds": 86.92
+  },
+  "build": "production and test-host pass",
+  "compiled": {
+    "pass": 74,
+    "fail": 0,
+    "assertions": 578,
+    "seconds": 39.02
+  },
+  "new_boundary_tests": 14,
+  "diff_check": "pass",
+  "cleanup": "cleanup-audit.json",
+  "artifacts": {
+    "dist/agentwatch": {
+      "bytes": 110008496,
+      "sha256": "8e8776e85d32b5229b52d2ff6dc86b5229b84fc6e25aa63ba5358af3b65a2189"
+    },
+    "dist/test-host": {
+      "bytes": 109693104,
+      "sha256": "e9673b492f56d59a510c419796edf08d451070fff808637015dde7d59689a2ca"
+    }
+  },
+  "live_backend_verified": false,
+  "native_windows_verified": false,
+  "native_macos_verified": false,
+  "committed": false,
+  "pushed": false,
+  "notes": [
+    "All HTTP is local mock; credentials are temporary fixtures.",
+    "Existing ambiguous-exchange protection is in-process and 120 seconds; no new restart-persistent ambiguity journal.",
+    "Source tests precede compiled tests; source tree restored."
+  ]
+}

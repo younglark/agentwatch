@@ -1,0 +1,46 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth.test.ts:
+(pass) macOS login URL uses the cli preset and never includes the verifier or team param [0.52ms]
+(pass) injected darwin polls 404 then persists tokens, and stderr printing omits the verifier [12.32ms]
+(pass) injected darwin policy denial, xAI identity, timeout and consecutive poll errors fail closed [13.74ms]
+(pass) refresh rotates 300s early, persists the new pair, and keeps a still-valid token on network failure [5.67ms]
+(pass) expired token without client_id fails; valid token without client_id still works; client_id is never guessed from a JWT [1.07ms]
+(pass) shouldLogout does not fall back to the previous token, and a subject mismatch is refused [3.53ms]
+(pass) conflicting client id env vars fail closed and invalid_grant after an ambiguous timeout keeps credentials [2.86ms]
+(pass) write RPCs are not automatically replayed after a backend 401, even when refresh would succeed [2.93ms]
+(pass) Linux desktop reads a peanuts fixture, never refreshes, and macOS ignores sand-secrets overrides [4.22ms]
+(pass) independent credential reread after refresh is visible to the next request, and health never includes secrets [49.56ms]
+
+test/auth-refresh-interleavings.test.ts:
+(pass) Recheck1 old refresh revoked preserves a newer pending login in another process [129.01ms]
+(pass) Recheck1 old refresh success preserves a newer pending login in another process [124.30ms]
+(pass) Recheck1 old refresh transient preserves a newer pending login in another process [118.67ms]
+(pass) Recheck1 delayed old refresh revoked cannot overwrite or clear a completed new login [5.51ms]
+(pass) Recheck1 delayed old refresh success cannot overwrite or clear a completed new login [4.30ms]
+(pass) Recheck1 delayed old refresh transient cannot overwrite or clear a completed new login [3.40ms]
+(pass) Recheck2 native HTTP headers followed by stalled body respects 40ms deadline and records ambiguity [52.66ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit logout [46.34ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit policy [46.77ms]
+(pass) Recheck2 headers connection interruption protects subsequent invalid_grant without leaking secrets [3.38ms]
+(pass) Recheck2 body connection interruption protects subsequent invalid_grant without leaking secrets [2.40ms]
+
+test/auth-boundaries.test.ts:
+(pass) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [4.06ms]
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [234.34ms]
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [8.61ms]
+(pass) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [235.37ms]
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [126.91ms]
+(pass) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [48.35ms]
+(pass) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [3.72ms]
+(pass) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [12.06ms]
+(pass) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [3022.02ms]
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.35ms]
+(pass) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [0.63ms]
+(pass) Spec8 cancel during credential lock wait is prompt and does not destroy shared refresh ownership [27.85ms]
+(pass) Spec3/8 refresh revocation or uncertain notification never alters task success or replays a send [90.08ms]
+
+ 34 pass
+ 0 fail
+ 283 expect() calls
+Ran 34 tests across 3 files. [4.57s]

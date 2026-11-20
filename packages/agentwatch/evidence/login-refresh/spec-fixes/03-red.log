@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+69 |   for(const status of [200,400,429,500,503])for(const body of [{shouldLogout:true},{error:'sign_in_policy_violation'},{shouldLogout:true,error:'invalid_grant'}]){
+70 |     const f=fixture();f.save({session_id:'ambiguous'});
+71 |     rememberAmbiguous('ambiguous','SECRET_RT',Date.now());
+72 |     try{
+73 |       const session=createAuthSession({platform:'darwin',env:f.env,fetch:asFetch(async()=>Response.json(body,{status}))});
+74 |       await expect(session.getAccessToken()).rejects.toMatchObject({details:{revoked:true,canFallback:false}});
+                                                          ^
+error: expect(received).rejects.toMatchObject(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:74:54)
+(fail) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [8.01ms]
+
+ 0 pass
+ 2 filtered out
+ 1 fail
+ 4 expect() calls
+Ran 1 test across 1 file. [131.00ms]

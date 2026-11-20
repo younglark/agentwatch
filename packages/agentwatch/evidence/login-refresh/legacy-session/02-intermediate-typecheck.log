@@ -1,0 +1,5 @@
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+test/auth-legacy-session.test.ts(50,53): error TS2345: Argument of type 'number | ReadableStream<Uint8Array<ArrayBuffer>> | undefined' is not assignable to parameter of type 'BodyInit | null | undefined'.
+  Type 'number' is not assignable to type 'BodyInit | null | undefined'.
+test/auth-legacy-session.test.ts(50,87): error TS2345: Argument of type 'number | ReadableStream<Uint8Array<ArrayBuffer>> | undefined' is not assignable to parameter of type 'BodyInit | null | undefined'.
+  Type 'number' is not assignable to type 'BodyInit | null | undefined'.

@@ -1,0 +1,71 @@
+Additional boundary tests replayed against pre-fix loadIndependent logic AFTER the initial red/green cycle; not claimed as first-written TDD red.
+bun test v1.4.4 (38afee6c8)
+
+test/auth-legacy-session.test.ts:
+24 |   try{
+25 |     await received.promise;
+26 |     second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());
+27 |     await pause(80);release.resolve();
+28 |     const results=await Promise.all([first,second]);
+29 |     expect(results.map(result=>result.ok)).toEqual([true,true]);expect(exchanges).toBe(1);
+                                                ^
+error: expect(received).toEqual(expected)
+
+  [
+    true,
+-   true,
++   false,
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-legacy-session.test.ts:29:44)
+(fail) legacy credential without session_id: independent in-process sessions reuse one peer refresh [110.83ms]
+46 |     child=Bun.spawn([process.execPath,resolve('test/auth-legacy-child.ts')],{env:{...f.env,AGENTWATCH_TEST_READY:join(f.root,'ready')},stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+47 |     for(let i=0;i<200&&!existsSync(join(f.root,'ready'));i++)await pause(10);
+48 |     expect(existsSync(join(f.root,'ready'))).toBe(true);expect(exchanges).toBe(1);
+49 |     release.resolve();expect((await first).ok).toBe(true);
+50 |     const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);
+51 |     expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:true});expect(exchanges).toBe(1);
+                                                                    ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "ok": true,
++   "ok": false,
+  }
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-legacy-session.test.ts:51:64)
+(fail) legacy credential without session_id: another Bun process reuses peer refresh with one exchange [246.82ms]
+(pass) waiting peer rejects real account instead of adopting a different session [104.58ms]
+(pass) waiting peer rejects real session instead of adopting a different session [104.05ms]
+(pass) waiting peer rejects real logout instead of adopting a different session [103.36ms]
+67 |     if(replacement!=='logout')await withCredentialLock(f.env,async()=>{
+68 |       writeIndependentUnlocked(f.env,replacement==='logout-restored'?old:{...old,session_id:'replacement-session',...(replacement==='account'?{account_subject:'different-owner',access_token:jwt('different-owner')}:{}),expires_at_ms:Date.now()+3600_000});
+69 |     });
+70 |     const saved=existsSync(f.file)?readFileSync(f.file,'utf8'):undefined;
+71 |     release.resolve();const results=await Promise.all([first,second]);
+72 |     expect(results.map(result=>result.ok)).toEqual([false,false]);expect(exchanges).toBe(1);
+                                                ^
+error: expect(received).toEqual(expected)
+
+  [
+    false,
+-   false,
++   true,
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-legacy-session.test.ts:72:44)
+(fail) waiting peer rejects real logout-restored instead of adopting a different session [106.27ms]
+
+ 3 pass
+ 3 fail
+ 28 expect() calls
+Ran 6 tests across 1 file. [874.00ms]

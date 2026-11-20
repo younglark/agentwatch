@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+57 |       const sibling=createAuthSession({platform:'darwin',env});
+58 |       await sibling.logout();
+59 |       if(restart){await sibling.beginLogin();await sibling.waitForLogin().catch(()=>{});}
+60 |       release.resolve();
+61 |       const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);
+62 |       expect(await child.exited).toBe(0);expect(JSON.parse(out).completed).toBe(false);
+                                                                                ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:62:76)
+(fail) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [179.26ms]
+
+ 0 pass
+ 1 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [319.00ms]

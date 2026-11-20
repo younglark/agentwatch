@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [127.33ms]
+
+ 1 pass
+ 4 filtered out
+ 0 fail
+ 9 expect() calls
+Ran 1 test across 1 file. [250.00ms]

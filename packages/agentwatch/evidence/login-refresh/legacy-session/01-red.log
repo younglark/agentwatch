@@ -1,0 +1,28 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-legacy-session.test.ts:
+24 |   try{
+25 |     await received.promise;
+26 |     second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());
+27 |     await pause(80);release.resolve();
+28 |     const results=await Promise.all([first,second]);
+29 |     expect(results.map(result=>result.ok)).toEqual([true,true]);expect(exchanges).toBe(1);
+                                                ^
+error: expect(received).toEqual(expected)
+
+  [
+    true,
+-   true,
++   false,
+  ]
+
+- Expected  - 1
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-legacy-session.test.ts:29:44)
+(fail) legacy credential without session_id: independent in-process sessions reuse one peer refresh [112.83ms]
+
+ 0 pass
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [229.00ms]

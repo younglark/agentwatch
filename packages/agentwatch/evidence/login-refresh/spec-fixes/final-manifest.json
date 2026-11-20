@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-20T22:17:44.958600+08:00",
+  "timezone": "Asia/Shanghai",
+  "head": "b52ba5e838930931e9ad93e96665cb80d99281cc",
+  "bun": "1.4.4",
+  "typecheck": "PASS",
+  "source": {
+    "pass": 120,
+    "fail": 0,
+    "expect": 895,
+    "seconds": 86.96
+  },
+  "compiled": {
+    "pass": 74,
+    "fail": 0,
+    "expect": 578,
+    "seconds": 39.33
+  },
+  "new_boundary_suite": {
+    "pass": 13,
+    "fail": 0,
+    "expect": 133
+  },
+  "native_windows_tested": false,
+  "native_macos_tested": false,
+  "live_attempted": false,
+  "artifacts": {
+    "agentwatch": {
+      "bytes": 110008496,
+      "sha256": "00e496aa18192ecbe370d059fcd8e64abad0dd1851da95d5ae2c58791911c464"
+    },
+    "test-host": {
+      "bytes": 109693104,
+      "sha256": "d677582c12ede0e4e8faf976f9ffd7c912b8e1e651da272383a984f2cde1806a"
+    }
+  }
+}

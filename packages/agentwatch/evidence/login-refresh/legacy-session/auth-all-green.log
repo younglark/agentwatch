@@ -1,0 +1,61 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth.test.ts:
+(pass) macOS login URL uses the cli preset and never includes the verifier or team param [0.80ms]
+(pass) injected darwin polls 404 then persists tokens, and stderr printing omits the verifier [14.30ms]
+(pass) injected darwin policy denial, xAI identity, timeout and consecutive poll errors fail closed [12.67ms]
+(pass) refresh rotates 300s early, persists the new pair, and keeps a still-valid token on network failure [6.30ms]
+(pass) expired token without client_id fails; valid token without client_id still works; client_id is never guessed from a JWT [1.20ms]
+(pass) shouldLogout does not fall back to the previous token, and a subject mismatch is refused [4.10ms]
+(pass) conflicting client id env vars fail closed and invalid_grant after an ambiguous timeout keeps credentials [3.27ms]
+(pass) write RPCs are not automatically replayed after a backend 401, even when refresh would succeed [3.02ms]
+(pass) Linux desktop reads a peanuts fixture, never refreshes, and macOS ignores sand-secrets overrides [4.50ms]
+(pass) independent credential reread after refresh is visible to the next request, and health never includes secrets [30.73ms]
+
+test/auth-legacy-session.test.ts:
+(pass) legacy credential without session_id: independent in-process sessions reuse one peer refresh [105.42ms]
+(pass) legacy credential without session_id: another Bun process reuses peer refresh with one exchange [276.64ms]
+(pass) waiting peer rejects real account instead of adopting a different session [105.47ms]
+(pass) waiting peer rejects real session instead of adopting a different session [104.75ms]
+(pass) waiting peer rejects real logout instead of adopting a different session [104.24ms]
+(pass) waiting peer rejects real logout-restored instead of adopting a different session [105.67ms]
+(pass) cross-process waiting peer rejects real account [268.58ms]
+(pass) cross-process waiting peer rejects real session [265.58ms]
+(pass) cross-process waiting peer rejects real logout [245.14ms]
+(pass) cross-process waiting peer rejects real logout-restored [262.32ms]
+
+test/auth-refresh-interleavings.test.ts:
+(pass) Recheck1 old refresh revoked preserves a newer pending login in another process [128.78ms]
+(pass) Recheck1 old refresh success preserves a newer pending login in another process [117.23ms]
+(pass) Recheck1 old refresh transient preserves a newer pending login in another process [111.67ms]
+(pass) Recheck1 delayed old refresh revoked cannot overwrite or clear a completed new login [4.09ms]
+(pass) Recheck1 delayed old refresh success cannot overwrite or clear a completed new login [3.57ms]
+(pass) Recheck1 delayed old refresh transient cannot overwrite or clear a completed new login [3.42ms]
+(pass) Recheck2 native HTTP headers followed by stalled body respects 40ms deadline and records ambiguity [52.25ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit logout [45.71ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit policy [44.65ms]
+(pass) Recheck2 headers connection interruption protects subsequent invalid_grant without leaking secrets [1.39ms]
+(pass) Recheck2 body connection interruption protects subsequent invalid_grant without leaking secrets [0.93ms]
+(pass) Recheck1 explicit logout during delayed revoked refresh cannot resurrect credentials or pending [3.91ms]
+(pass) Recheck1 explicit logout during delayed success refresh cannot resurrect credentials or pending [2.32ms]
+(pass) Recheck1 explicit logout during delayed transient refresh cannot resurrect credentials or pending [1.90ms]
+
+test/auth-boundaries.test.ts:
+(pass) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [0.97ms]
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [222.26ms]
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [8.71ms]
+(pass) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [231.49ms]
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [126.67ms]
+(pass) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [48.97ms]
+(pass) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [4.17ms]
+(pass) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [11.93ms]
+(pass) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [3023.14ms]
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.33ms]
+(pass) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [0.64ms]
+(pass) Spec8 cancel during credential lock wait is prompt and does not destroy shared refresh ownership [27.36ms]
+(pass) Spec3/8 refresh revocation or uncertain notification never alters task success or replays a send [80.59ms]
+
+ 47 pass
+ 0 fail
+ 375 expect() calls
+Ran 47 tests across 4 files. [6.41s]

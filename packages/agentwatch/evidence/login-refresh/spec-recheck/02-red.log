@@ -1,0 +1,113 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-refresh-interleavings.test.ts:
+75 |   const server=Bun.serve({hostname:'127.0.0.1',port:0,idleTimeout:0,fetch:()=>new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{'));},cancel(){canceled=true;}}),{headers:{'content-type':'application/json'}})});
+76 |   try{
+77 |     f.save(`http://127.0.0.1:${server.port}`);const before=readFileSync(f.file,'utf8');
+78 |     const started=Date.now();let caught:any;
+79 |     try{await refreshIndependentTokens(readIndependentCredentials(f.env),'explicit',{deadlineMs:40});}catch(error){caught=error;}
+80 |     expect(caught).toMatchObject({details:{kind:'timeout',ambiguous:true}});
+                        ^
+error: expect(received).toMatchObject(expected)
+
+- {
+-   "details": {
+-     "ambiguous": true,
+-     "kind": "timeout",
+-   },
+- }
++ [RefreshError: Token refresh response had no access_token; credentials were kept]
+
+- Expected  - 6
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:80:20)
+(fail) Recheck2 native HTTP headers followed by stalled body respects 40ms deadline and records ambiguity [48.36ms]
+100 |   const session=createAuthSession({platform:'darwin',env:f.env,fetch:fetcher});
+101 |   try{
+102 |     const before=readFileSync(f.file,'utf8');
+103 |     let first:any,second:any;
+104 |     try{await session.getAccessToken();}catch(error){first=error;}
+105 |     expect(first).toMatchObject({details:{kind:'timeout',ambiguous:true}});
+                        ^
+error: expect(received).toMatchObject(expected)
+
+- {
+-   "details": {
+-     "ambiguous": true,
+-     "kind": "timeout",
+-   },
+- }
++ [RefreshError: Token refresh response had no access_token; credentials were kept]
+
+- Expected  - 6
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:105:19)
+(fail) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit logout [46.09ms]
+100 |   const session=createAuthSession({platform:'darwin',env:f.env,fetch:fetcher});
+101 |   try{
+102 |     const before=readFileSync(f.file,'utf8');
+103 |     let first:any,second:any;
+104 |     try{await session.getAccessToken();}catch(error){first=error;}
+105 |     expect(first).toMatchObject({details:{kind:'timeout',ambiguous:true}});
+                        ^
+error: expect(received).toMatchObject(expected)
+
+- {
+-   "details": {
+-     "ambiguous": true,
+-     "kind": "timeout",
+-   },
+- }
++ [RefreshError: Token refresh response had no access_token; credentials were kept]
+
+- Expected  - 6
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-refresh-interleavings.test.ts:105:19)
+(fail) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit policy [43.65ms]
+64 |   const terminal=body?.shouldLogout===true||body?.error==='sign_in_policy_violation'||body?.error==='invalid_grant';
+65 |   if(terminal){
+66 |     if(body?.shouldLogout!==true&&body?.error==='invalid_grant'&&isAmbiguousProtect(creds.session_id,creds.refresh_token,clock())){
+67 |       throw new RefreshError('invalid_grant after an ambiguous refresh timeout; credentials were kept',{kind:'timeout',canFallback:stillValid(),ambiguous:true});
+68 |     }
+69 |     throw new RefreshError('Token refresh was revoked; stored credentials were not reused',{kind:'revoked',canFallback:false,revoked:true});
+               ^
+error: Token refresh was revoked; stored credentials were not reused
+ details: {
+  kind: "revoked",
+  canFallback: false,
+  revoked: true,
+},
+    code: "AUTH_NOT_CONFIGURED"
+
+      at refreshIndependentTokens (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/refresh.ts:69:11)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/session.ts:154:25)
+      at async withAdvisoryLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/lock.ts:74:22)
+(fail) Recheck2 headers connection interruption protects subsequent invalid_grant without leaking secrets [1.98ms]
+64 |   const terminal=body?.shouldLogout===true||body?.error==='sign_in_policy_violation'||body?.error==='invalid_grant';
+65 |   if(terminal){
+66 |     if(body?.shouldLogout!==true&&body?.error==='invalid_grant'&&isAmbiguousProtect(creds.session_id,creds.refresh_token,clock())){
+67 |       throw new RefreshError('invalid_grant after an ambiguous refresh timeout; credentials were kept',{kind:'timeout',canFallback:stillValid(),ambiguous:true});
+68 |     }
+69 |     throw new RefreshError('Token refresh was revoked; stored credentials were not reused',{kind:'revoked',canFallback:false,revoked:true});
+               ^
+error: Token refresh was revoked; stored credentials were not reused
+ details: {
+  kind: "revoked",
+  canFallback: false,
+  revoked: true,
+},
+    code: "AUTH_NOT_CONFIGURED"
+
+      at refreshIndependentTokens (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/refresh.ts:69:11)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/session.ts:154:25)
+      at async withAdvisoryLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/lock.ts:74:22)
+(fail) Recheck2 body connection interruption protects subsequent invalid_grant without leaking secrets [1.53ms]
+
+ 0 pass
+ 6 filtered out
+ 5 fail
+ 5 expect() calls
+Ran 5 tests across 1 file. [258.00ms]

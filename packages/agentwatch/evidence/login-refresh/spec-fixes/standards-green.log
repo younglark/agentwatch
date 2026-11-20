@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.33ms]
+(pass) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [1.43ms]
+
+ 2 pass
+ 9 filtered out
+ 0 fail
+ 10 expect() calls
+Ran 2 tests across 1 file. [128.00ms]

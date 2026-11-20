@@ -1,0 +1,22 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+139 |   for(const access of ['OPAQUE_TOKEN',jwt({exp:Math.floor(Date.now()/1000)+3600}),jwt({sub:'other',exp:Math.floor(Date.now()/1000)+3600})]){
+140 |     const f=fixture();f.save({expires_at_ms:Date.now()-1});
+141 |     try{
+142 |       const before=readFileSync(f.file,'utf8');
+143 |       const session=createAuthSession({platform:'darwin',env:f.env,fetch:asFetch(async()=>Response.json({access_token:access,refresh_token:'NEW_SECRET_RT'}))});
+144 |       await expect(session.getAccessToken()).rejects.toMatchObject({details:{kind:'subject_mismatch'}});
+                                                           ^
+error: expect(received).rejects.toMatchObject(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:144:54)
+(fail) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [5.70ms]
+
+ 0 pass
+ 6 filtered out
+ 1 fail
+Ran 1 test across 1 file. [138.00ms]

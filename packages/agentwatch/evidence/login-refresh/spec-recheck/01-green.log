@@ -1,0 +1,14 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-refresh-interleavings.test.ts:
+(pass) Recheck1 old refresh revoked preserves a newer pending login in another process [145.17ms]
+(pass) Recheck1 old refresh success preserves a newer pending login in another process [138.91ms]
+(pass) Recheck1 old refresh transient preserves a newer pending login in another process [119.07ms]
+(pass) Recheck1 delayed old refresh revoked cannot overwrite or clear a completed new login [6.38ms]
+(pass) Recheck1 delayed old refresh success cannot overwrite or clear a completed new login [4.32ms]
+(pass) Recheck1 delayed old refresh transient cannot overwrite or clear a completed new login [3.60ms]
+
+ 6 pass
+ 0 fail
+ 42 expect() calls
+Ran 6 tests across 1 file. [539.00ms]

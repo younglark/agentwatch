@@ -1,0 +1,19 @@
+ M ../../README.md
+ M ../../docs/task-core-opencode-map.md
+ M README.md
+ M RESULTS.md
+ M package.json
+ M src/cli.ts
+ M src/connect-client.ts
+ M src/service.ts
+ M test/command-contracts.ts
+ M test/command-harness.ts
+?? evidence/login-refresh/
+?? src/auth/
+?? test/auth-boundaries.test.ts
+?? test/auth-cli-child.ts
+?? test/auth-legacy-child.ts
+?? test/auth-legacy-session.test.ts
+?? test/auth-race-child.ts
+?? test/auth-refresh-interleavings.test.ts
+?? test/auth.test.ts

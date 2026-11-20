@@ -1,0 +1,6 @@
+{
+  "scope": "fixture cwd/executable tasks of any executable type plus project Bun/agentwatch daemons and test children; unmatched process arguments not retained",
+  "remaining_processes": [],
+  "src_restored": true,
+  "compiled_staging_absent": true
+}

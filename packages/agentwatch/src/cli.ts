@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { join,resolve } from 'node:path';
 import { CoreError,exitCodes,failure,integer,PROTOCOL } from './domain.ts';
 import { ensure,request,startDaemon } from './service.ts';
+import { authMode,loginUnsupportedOnDesktop } from './auth/platform.ts';
 declare const AGENTWATCH_COMPILED:boolean;
 export const selfCommand=()=>typeof AGENTWATCH_COMPILED!=='undefined'&&AGENTWATCH_COMPILED
   ?[process.execPath]:[process.execPath,resolve(import.meta.dir,'main.ts')];
@@ -30,6 +31,31 @@ export async function runCli(args:string[]) {
     Command.make('logs',{...defaults(),id:Argument.String('task-id'),stream:Flag.String('stream').pipe(Flag.withDefault('stdout')),offset:Flag.String('offset').pipe(Flag.withDefault('0')),limit:Flag.String('limit').pipe(Flag.withDefault('4096'))},c=>task(()=>invoke('logs',c.state,{id:c.id,stream:c.stream,offset:integer(Number(c.offset),'offset',Number.MAX_SAFE_INTEGER),limit:integer(Number(c.limit),'limit',65536)}))),
     Command.make('wait',{...defaults(),id:Argument.String('task-id'),timeout:Flag.String('timeout').pipe(Flag.withDefault('30'))},c=>task(()=>invoke('wait',c.state,{id:c.id,timeoutMs:integer(Number(c.timeout),'timeout',300)*1000}))),
     Command.make('cancel',{...defaults(),id:Argument.String('task-id')},c=>task(()=>invoke('cancel',c.state,{id:c.id}))),
+    Command.make('login',defaults(),c=>task(async()=>{
+      if(authMode()!=='independent')throw new CoreError('AUTH_NOT_CONFIGURED',loginUnsupportedOnDesktop());
+      const info=await ensure(c.state,selfCommand());
+      const started=await request(info,'login',{});
+      if(typeof started.login_url!=='string'||!started.login_url)throw new CoreError('AUTH_NOT_CONFIGURED','Login URL was not issued');
+      console.error(started.login_url);
+      if(!process.stdin.isTTY){
+        console.log(JSON.stringify({version:PROTOCOL,command:'login',data:{status:'pending',uuid:started.uuid}}));
+        return;
+      }
+      const end=Date.now()+20*60*1000;
+      for(;;){
+        const status=await request(info,'login_status',{});
+        if(status.status==='completed'){console.log(JSON.stringify({version:PROTOCOL,command:'login',data:{ok:true,uuid:started.uuid}}));return;}
+        if(status.status==='failed')throw new CoreError('AUTH_NOT_CONFIGURED',typeof status.message==='string'?status.message:'Login failed');
+        if(Date.now()>=end)throw new CoreError('AUTH_NOT_CONFIGURED','Timed out waiting for browser login; open the new URL on stderr and retry');
+        await new Promise(r=>setTimeout(r,250));
+      }
+    })),
+    Command.make('logout',defaults(),c=>task(async()=>{
+      if(authMode()!=='independent')throw new CoreError('AUTH_NOT_CONFIGURED',loginUnsupportedOnDesktop());
+      const info=await ensure(c.state,selfCommand());
+      await request(info,'logout',{});
+      console.log(JSON.stringify({version:PROTOCOL,command:'logout',data:{ok:true}}));
+    })),
     Command.make('internal-serve',defaults(),c=>task(async()=>{
       const service=await startDaemon(c.state);if(!service)return;
       const stop=()=>{void service.close();};process.once('SIGTERM',stop);process.once('SIGINT',stop);

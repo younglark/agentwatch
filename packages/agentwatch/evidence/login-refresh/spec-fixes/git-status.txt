@@ -1,0 +1,16 @@
+ M README.md
+ M docs/task-core-opencode-map.md
+ M packages/agentwatch/README.md
+ M packages/agentwatch/RESULTS.md
+ M packages/agentwatch/package.json
+ M packages/agentwatch/src/cli.ts
+ M packages/agentwatch/src/connect-client.ts
+ M packages/agentwatch/src/service.ts
+ M packages/agentwatch/test/command-contracts.ts
+ M packages/agentwatch/test/command-harness.ts
+?? packages/agentwatch/evidence/login-refresh/
+?? packages/agentwatch/src/auth/
+?? packages/agentwatch/test/auth-boundaries.test.ts
+?? packages/agentwatch/test/auth-cli-child.ts
+?? packages/agentwatch/test/auth-race-child.ts
+?? packages/agentwatch/test/auth.test.ts

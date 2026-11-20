@@ -1,0 +1,164 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+28 |     await received.promise;
+29 |     if(crossProcess){child=Bun.spawn([process.execPath,resolve('test/auth-legacy-child.ts')],{env:{...f.env,AGENTWATCH_TEST_READY:join(f.root,'ready')},stdin:'ignore',stdout:'pipe',stderr:'pipe'});await waitReady(f.root);}
+30 |     else{second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());await pause(80);}
+31 |     release.resolve();expect((await first).ok).toBe(true);
+32 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:true});expect(out+err).not.toContain('SECRET_');expect(out+err).not.toContain(jwt('owner'));}
+33 |     else{const result=await second!;expect(result.ok).toBe(true);if(result.ok)expect(result.value.accessToken).toBe(jwt('owner'));}
+                                                           ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:33:55)
+(fail) metadata matrix multi-session id=false binding=false accessSub=false reuses exactly one refresh [111.79ms]
+(pass) metadata matrix multi-session id=false binding=false accessSub=true reuses exactly one refresh [104.34ms]
+(pass) metadata matrix multi-session id=false binding=true accessSub=false reuses exactly one refresh [104.46ms]
+(pass) metadata matrix multi-session id=false binding=true accessSub=true reuses exactly one refresh [104.45ms]
+28 |     await received.promise;
+29 |     if(crossProcess){child=Bun.spawn([process.execPath,resolve('test/auth-legacy-child.ts')],{env:{...f.env,AGENTWATCH_TEST_READY:join(f.root,'ready')},stdin:'ignore',stdout:'pipe',stderr:'pipe'});await waitReady(f.root);}
+30 |     else{second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());await pause(80);}
+31 |     release.resolve();expect((await first).ok).toBe(true);
+32 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:true});expect(out+err).not.toContain('SECRET_');expect(out+err).not.toContain(jwt('owner'));}
+33 |     else{const result=await second!;expect(result.ok).toBe(true);if(result.ok)expect(result.value.accessToken).toBe(jwt('owner'));}
+                                                           ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:33:55)
+(fail) metadata matrix multi-session id=true binding=false accessSub=false reuses exactly one refresh [103.99ms]
+(pass) metadata matrix multi-session id=true binding=false accessSub=true reuses exactly one refresh [104.31ms]
+(pass) metadata matrix multi-session id=true binding=true accessSub=false reuses exactly one refresh [103.84ms]
+(pass) metadata matrix multi-session id=true binding=true accessSub=true reuses exactly one refresh [103.75ms]
+27 |   try{
+28 |     await received.promise;
+29 |     if(crossProcess){child=Bun.spawn([process.execPath,resolve('test/auth-legacy-child.ts')],{env:{...f.env,AGENTWATCH_TEST_READY:join(f.root,'ready')},stdin:'ignore',stdout:'pipe',stderr:'pipe'});await waitReady(f.root);}
+30 |     else{second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());await pause(80);}
+31 |     release.resolve();expect((await first).ok).toBe(true);
+32 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:true});expect(out+err).not.toContain('SECRET_');expect(out+err).not.toContain(jwt('owner'));}
+                                                                                                                                                                                       ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "ok": true,
++   "code": "AUTH_NOT_CONFIGURED",
++   "ok": false,
+  }
+
+- Expected  - 1
++ Received  + 2
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:32:179)
+(fail) metadata matrix cross-process id=false binding=false accessSub=false reuses exactly one refresh [244.34ms]
+(pass) metadata matrix cross-process id=false binding=false accessSub=true reuses exactly one refresh [246.57ms]
+(pass) metadata matrix cross-process id=false binding=true accessSub=false reuses exactly one refresh [249.24ms]
+(pass) metadata matrix cross-process id=false binding=true accessSub=true reuses exactly one refresh [241.01ms]
+27 |   try{
+28 |     await received.promise;
+29 |     if(crossProcess){child=Bun.spawn([process.execPath,resolve('test/auth-legacy-child.ts')],{env:{...f.env,AGENTWATCH_TEST_READY:join(f.root,'ready')},stdin:'ignore',stdout:'pipe',stderr:'pipe'});await waitReady(f.root);}
+30 |     else{second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());await pause(80);}
+31 |     release.resolve();expect((await first).ok).toBe(true);
+32 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:true});expect(out+err).not.toContain('SECRET_');expect(out+err).not.toContain(jwt('owner'));}
+                                                                                                                                                                                       ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "ok": true,
++   "code": "AUTH_NOT_CONFIGURED",
++   "ok": false,
+  }
+
+- Expected  - 1
++ Received  + 2
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:32:179)
+(fail) metadata matrix cross-process id=true binding=false accessSub=false reuses exactly one refresh [244.11ms]
+(pass) metadata matrix cross-process id=true binding=false accessSub=true reuses exactly one refresh [254.40ms]
+(pass) metadata matrix cross-process id=true binding=true accessSub=false reuses exactly one refresh [240.65ms]
+(pass) metadata matrix cross-process id=true binding=true accessSub=true reuses exactly one refresh [242.70ms]
+(pass) metadata unbound multi-session rejects account without a peer result from exact snapshot [105.21ms]
+(pass) metadata unbound multi-session rejects session without a peer result from exact snapshot [103.67ms]
+ 5 | export function resolveWebsite(env:NodeJS.ProcessEnv=process.env){return stripSlash(env.AGENTWATCH_WEBSITE?.trim()||DEFAULT_WEBSITE);}
+ 6 | export function resolveApiBase(env:NodeJS.ProcessEnv=process.env){return stripSlash(env.AGENTWATCH_API_BASE?.trim()||DEFAULT_API_BASE);}
+ 7 | export function originUrl(raw:string,label:string){
+ 8 |   let url:URL;
+ 9 |   try{url=new URL(raw);}catch{throw new CoreError('AUTH_NOT_CONFIGURED',`Invalid ${label}`);}
+10 |   if(url.username||url.password||url.search||url.hash||url.pathname!=='/'||(url.protocol!=='https:'&&!(url.protocol==='http:'&&['127.0.0.1','[::1]'].includes(url.hostname))))throw new CoreError('AUTH_NOT_CONFIGURED',`Untrusted ${label}`);
+                                                                                                                                                                                         ^
+error: Untrusted credential backend
+ code: "AUTH_NOT_CONFIGURED"
+
+      at originUrl (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/urls.ts:10:181)
+      at writeIndependentUnlocked (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/store.ts:111:3)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:51:45)
+      at withAdvisoryLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/lock.ts:74:22)
+      at withCredentialLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/store.ts:105:10)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:51:11)
+(fail) metadata unbound multi-session rejects backend without a peer result from exact snapshot [103.65ms]
+49 |     const old=JSON.parse(readFileSync(f.file,'utf8'));
+50 |     if(change==='logout-restored')await createAuthSession({platform:'darwin',env:f.env}).logout();
+51 |     await withCredentialLock(f.env,async()=>writeIndependentUnlocked(f.env,{...old,...(change==='account'||change==='unproven-sub'?{account_subject:'different-owner',access_token:jwt('different-owner')}:{}),...(change==='session'?{session_id:'different-session'}:{}),...(change==='backend'?{backend:`http://localhost:${server.port}`} :{}),...(change==='client'?{client_id:'different-client'}:{})}));
+52 |     const replacement=readFileSync(f.file,'utf8');release.resolve();expect((await first).ok).toBe(false);
+53 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:false,code:'AUTH_NOT_CONFIGURED'});expect(out+err).not.toContain('SECRET_');}
+54 |     else{const result=await second!;expect(result.ok).toBe(false);if(!result.ok)expect(result.error.code).toBe('AUTH_NOT_CONFIGURED');}
+                                                           ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:54:55)
+(fail) metadata unbound multi-session rejects client without a peer result from exact snapshot [104.63ms]
+(pass) metadata unbound multi-session rejects unproven-sub without a peer result from exact snapshot [103.34ms]
+(pass) metadata unbound multi-session rejects logout-restored without a peer result from exact snapshot [104.16ms]
+(pass) metadata unbound cross-process rejects account without a peer result from exact snapshot [261.16ms]
+(pass) metadata unbound cross-process rejects session without a peer result from exact snapshot [244.48ms]
+ 5 | export function resolveWebsite(env:NodeJS.ProcessEnv=process.env){return stripSlash(env.AGENTWATCH_WEBSITE?.trim()||DEFAULT_WEBSITE);}
+ 6 | export function resolveApiBase(env:NodeJS.ProcessEnv=process.env){return stripSlash(env.AGENTWATCH_API_BASE?.trim()||DEFAULT_API_BASE);}
+ 7 | export function originUrl(raw:string,label:string){
+ 8 |   let url:URL;
+ 9 |   try{url=new URL(raw);}catch{throw new CoreError('AUTH_NOT_CONFIGURED',`Invalid ${label}`);}
+10 |   if(url.username||url.password||url.search||url.hash||url.pathname!=='/'||(url.protocol!=='https:'&&!(url.protocol==='http:'&&['127.0.0.1','[::1]'].includes(url.hostname))))throw new CoreError('AUTH_NOT_CONFIGURED',`Untrusted ${label}`);
+                                                                                                                                                                                         ^
+error: Untrusted credential backend
+ code: "AUTH_NOT_CONFIGURED"
+
+      at originUrl (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/urls.ts:10:181)
+      at writeIndependentUnlocked (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/store.ts:111:3)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:51:45)
+      at withAdvisoryLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/lock.ts:74:22)
+      at withCredentialLock (/workspace/agentwatch-bun-spike/packages/agentwatch/src/auth/store.ts:105:10)
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:51:11)
+(fail) metadata unbound cross-process rejects backend without a peer result from exact snapshot [226.44ms]
+48 |     else{second=outcome(createAuthSession({platform:'darwin',env:f.env}).getAccessToken());await pause(80);}
+49 |     const old=JSON.parse(readFileSync(f.file,'utf8'));
+50 |     if(change==='logout-restored')await createAuthSession({platform:'darwin',env:f.env}).logout();
+51 |     await withCredentialLock(f.env,async()=>writeIndependentUnlocked(f.env,{...old,...(change==='account'||change==='unproven-sub'?{account_subject:'different-owner',access_token:jwt('different-owner')}:{}),...(change==='session'?{session_id:'different-session'}:{}),...(change==='backend'?{backend:`http://localhost:${server.port}`} :{}),...(change==='client'?{client_id:'different-client'}:{})}));
+52 |     const replacement=readFileSync(f.file,'utf8');release.resolve();expect((await first).ok).toBe(false);
+53 |     if(child){const [out,err]=await Promise.all([new Response(child.stdout).text(),new Response(child.stderr).text()]);expect(await child.exited).toBe(0);expect(JSON.parse(out)).toEqual({ok:false,code:'AUTH_NOT_CONFIGURED'});expect(out+err).not.toContain('SECRET_');}
+                                                                                                                                                                                       ^
+error: expect(received).toEqual(expected)
+
+  {
+-   "code": "AUTH_NOT_CONFIGURED",
+-   "ok": false,
++   "ok": true,
+  }
+
+- Expected  - 2
++ Received  + 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-metadata-migration.test.ts:53:179)
+(fail) metadata unbound cross-process rejects client without a peer result from exact snapshot [243.24ms]
+(pass) metadata unbound cross-process rejects unproven-sub without a peer result from exact snapshot [249.69ms]
+(pass) metadata unbound cross-process rejects logout-restored without a peer result from exact snapshot [272.77ms]
+
+ 20 pass
+ 8 fail
+ 181 expect() calls
+Ran 28 tests across 1 file. [5.04s]

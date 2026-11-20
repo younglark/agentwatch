@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [11.16ms]
+
+ 1 pass
+ 2 filtered out
+ 0 fail
+ 30 expect() calls
+Ran 1 test across 1 file. [114.00ms]

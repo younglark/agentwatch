@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+106 |   for(const phase of ['headers','success-body','policy-body']){
+107 |     let canceled=false;
+108 |     const fetch=asFetch(async()=>phase==='headers'?new Promise<Response>(()=>{}):new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('{'));},cancel(){canceled=true;}}),{status:phase==='policy-body'?403:200}));
+109 |     const opts={apiBase:'http://127.0.0.1:1',uuid:'public',verifier:'SECRET_VERIFIER',fetch,requestDeadlineMs:30};
+110 |     const result=await Promise.race([pollOnce(opts),new Promise<any>(r=>setTimeout(()=>r({status:'hung'}),180))]);
+111 |     expect(result.status).toBe('failed');
+                                ^
+error: expect(received).toBe(expected)
+
+Expected: "failed"
+Received: "hung"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:111:27)
+(fail) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [181.70ms]
+
+ 0 pass
+ 4 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [312.00ms]

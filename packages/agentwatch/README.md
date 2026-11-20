@@ -4,9 +4,10 @@ This is modular implementation code, not another generic PoC. It is **not yet a
 production-ready runner**. 身份查询和通知由 agentwatch 内建的 Bun HTTP 客户端直接请求；
 `grokbot-control` npm-v0.7.0 **只作只读协议参考**，不调用外部 `gbc`，不安装/内嵌它、
 官方 App、Node、模型 SDK、ACP、webhook 或 Stop Hook。这里使用的后端契约来自非官方
-逆向资料，不是官方公开 API。本轮只做合成凭据 + 本地 mock Connect 后端验收，没有 live。
-无可用自有凭据 → `AUTH_NOT_CONFIGURED`（exit 4），不插任务、不启动 native 命令。
-没有生产 fake-verifier flag / 环境开关，不读取真实 ~/.gbc、官方桌面凭据或 keychain。
+逆向资料，不是官方公开 API。本轮用合成凭据、临时 HOME 和本地 mock HTTP 验收登录/刷新/共享桌面读取，没有 live，
+没有读取真实 ~/.gbc、真实官方 sand-secrets 或钥匙串，也没有连接真实 Cursor 后端。
+无可用凭据 → `AUTH_NOT_CONFIGURED`（exit 4），不插任务、不启动 native 命令。
+没有生产 fake-verifier flag / `--auth` / `AGENTWATCH_AUTH_MODE` 逃逸。
 
 The original root src/ and experiments/bun-daemon-spike remain historical code.
 This package is built independently; it does not replace the legacy root bin yet.
@@ -31,6 +32,8 @@ agentwatch status TASK_ID [--state DIR] [--json]
 agentwatch logs TASK_ID [--stream stdout|stderr] [--offset BYTES] [--limit BYTES] [--state DIR] [--json]
 agentwatch wait TASK_ID [--timeout SECONDS] [--state DIR] [--json]
 agentwatch cancel TASK_ID [--state DIR] [--json]
+agentwatch login [--state DIR]
+agentwatch logout [--state DIR]
 ```
 
 - `--` splits bot-native argv from our flags; no joining, shell parsing or resume /
@@ -57,37 +60,91 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
   conflict; 7 IPC auth; 8 local/external lookup transport unavailable; 11 draining; 12 version /
   migration incompatibility. Unknown transport interruptions are not called success.
 
-## Agentwatch 自有凭据（登录/刷新命令后置）
+## 平台写死的鉴权（不做 auto，没有 --auth）
 
-本轮只支持安全预配置的有效 access token。**浏览器登录、OAuth refresh、自动迁移、
-真实用户/bot/团队绑定验证均未实现**；不会从 gbc 或官方 App 导入凭据。过期/缺失/不安全
-文件一律 exit 4；不自动登录或重放请求，也不把 client_id 从 JWT、App 或包内常量猜出来。
+三端都有任务 daemon。鉴权路径按平台写死，没有生产 `--auth` / `AGENTWATCH_AUTH_MODE`。
 
-默认凭据路径：`~/.agentwatch/auth/credentials.json`；仅 `AGENTWATCH_CREDENTIALS` 可显式
-指定另一份 agentwatch 自有文件。文件须由当前用户持有、普通文件、无 symlink/hardlink、
-权限 0600（或更窄），直接父目录私有 0700（或更窄），路径不经 symlink，最大 16 KiB。
-Windows ACL 尚未实现，Windows 凭据读取失败关闭。它不是对任意同 UID 程序的秘密沙箱。
-凭据加载有界、不回显解析异常；本轮不提供生成/编辑凭据的产品命令。请通过受信任的
-私有配置/安全编辑方式 provision，不把 token 放在 argv 或聊天、日志里。
+### macOS：独立鉴权
 
-agentwatch 独立格式如下（**全部是合成占位符，不是真实凭据**）：
+- 只用 agentwatch 自有凭据。默认 `~/.agentwatch/auth/credentials.json`，或显式
+  `AGENTWATCH_CREDENTIALS`。永远不读官方 sand-secrets.json / 钥匙串，即使设置了
+  `AGENTWATCH_SECRETS_FILE` / `AGENTWATCH_USER_DATA` 也不会改走共享桌面鉴权。
+- `agentwatch login`：确保 daemon，立即把
+  `https://cursor.com/loginDeepControl?challenge&uuid&mode=login&redirectTarget=cli`
+  打到 stderr（只要链接，不要设备码、localhost 回调或隧道；`cli` 预设不加
+  `supportsSelectedTeamLogin`）。无 TTY 时 stdout 一行 pending JSON 后立即返回，由 daemon
+  后台轮询；有 TTY 才等待完成。守护进程轮询 `GET {api}/auth/poll?uuid&verifier`：
+  404 等待，退避 `1s × 1.2^i` 且上限 10s，最多 150 次，连续 3 次非 404 错误则停。
+  website 默认 `https://cursor.com`（`AGENTWATCH_WEBSITE`），api 默认
+  `https://api2.cursor.sh`（`AGENTWATCH_API_BASE`）。成功体 `{accessToken,refreshToken}`
+  写入自有目录；`403 {error:sign_in_policy_violation}` 为策略拒绝；`xaiAccessToken`
+  视为不支持。verifier 不得出现在 stdout / stderr / health / argv。
+  每次 HTTP 10s（headers 与 body），总体 20min；有界响应读取且总会清理 reader。
+  登录落盘核对持久 generation 与 pending CAS；logout/新 login 后，旧 poll 不得复活会话。
+  策略拒绝/超时/连续失败会作废 pending、持久化安全失败状态，后续 login 可生成新挑战。
+- `agentwatch logout`：清除自有凭据和 pending login，不碰官方凭据。
+- 独立凭证安全检查保留：当前用户所有、普通文件、无 symlink/hardlink、文件 0600、
+  父目录 0700、路径不含 `.gbc` 或 `sand-secrets`、最大 16 KiB、有界读取且不回显解析异常。
+- 可选字段：`refresh_token`、绑定的 `client_id`、`expires_at_ms`、`account_subject`、
+  `session_id`、`revision`、内部刷新关联摘要 `refresh_proof`（不输出）。`client_id` 只来自 `AGENTWATCH_CLIENT_ID` 或
+  `AGENTWATCH_OAUTH_CLIENT_ID`（两者都有必须一致）或登录/刷新时持久化绑定；绝不内置，
+  不从 JWT / App / 包内常量猜。仍有效的 access token 在没有 client_id 时可继续用；
+  只有必须 refresh 且缺 client_id 才 `AUTH_NOT_CONFIGURED` / exit 4。
+- Refresh：`POST new URL("/oauth/token", backend)`，JSON
+  `{client_id, grant_type:"refresh_token", refresh_token}`，`redirect:error`，20s
+  截止。缺 `access_token` 不算成功；缺少新 `refresh_token` 则保留旧的。在 JWT `exp`
+  前 300s 刷新。跨进程 OS 咨询锁（Linux OFD / macOS flock）+ 进程内 singleflight；
+  旧凭据若缺可选 session_id，以完整规范化旧凭据快照的 SHA-256 推导稳定迁移 ID，
+  仅刷新成功时保存（失败不改原文件）。复用 peer 结果不能只比较 session/subject：
+  每次成功刷新在同一自有凭据文件写入 `refresh_proof={parent,result}` 摘要，绑定完整规范化
+  旧快照（含旧摘要）、登录 generation、显式 client_id，以及完整新结果（仅排除摘要自身）。
+  等待者只能采用原样未变的快照，或可核对上述关联的直接 peer 后继；backend/client 必须
+  保持绑定，session_id 必须保留/按旧快照迁移；已有 subject 绝不能改变或删除，原先未绑定
+  时只允许补齐为新 access JWT 的 sub。没有证明、结果被改、跨 generation 均失败关闭。
+  关联只支持直接一次轮换，不保留祖先链；若错过多次轮换、无法证明关联，旧请求失败，
+  不猜测采用新会话。摘要不是远端账号签名，也不是模糊交换恢复记录。
+  刷新 exchange 锁与短 mutation 锁分开（固定 exchange→mutation 顺序），网络期间 login/logout
+  可前进；锁下重读，按 session/revision/token 与持久 login generation CAS 原子写入。
+  旧 refresh 撤销只条件清理匹配的旧凭证，绝不删除新 pending/generation；只有显式 logout
+  撤销相应登录。锁文件不 stale-break、不 unlink。`shouldLogout` / 撤销不回退旧
+  token（即便响应为 429/5xx，明确撤销也最高优先）；网络 / 5xx / 429 / 超时保留凭证，
+  若旧 access 仍在有效窗内可继续使用。20s 期限覆盖 headers 与 body；响应体超时/连接中断
+  同样记为模糊交换，不吞为 malformed。不明交换后的 `invalid_grant` 只有在没有明确
+  shouldLogout/策略拒绝时才按同 session/refresh-token 的模糊保护窗保留凭证。
+  **该保护仅在同一进程内保留 120 秒，未持久化，不保证跨进程/重启保护**：另一进程或重启后，
+  若交换实际已轮换 token，旧 refresh token 可能返回 invalid_grant，届时需重新登录。
+  已绑定 account subject 时，新 access JWT 必须
+  带匹配的 `sub`，缺失/opaque 也拒绝转换。写 RPC（通知发信）在不确定时绝不因 refresh 自动重放。
+- 更换鉴权锁协议前应先停止旧 daemon，不混用旧/新二进制对同一凭据目录写入。
+- Windows 上不会使用这条独立鉴权路径。独立凭证的 Windows ACL 仍未实现。
 
-```json
-{"version":1,"backend":"https://YOUR-EXPLICIT-BACKEND","client_id":"YOUR-EXPLICIT-CLIENT-ID","access_token":"SYNTHETIC_TOKEN","expires_at_ms":1893456000000}
-```
+### Linux / Windows：共享桌面鉴权
 
-- `backend` 与 token 同文件绑定，仅 HTTPS origin，无用户信息/路径/query/fragment；
-  本地 mock 仅额外允许 `http://127.0.0.1:PORT` / `[::1]`。不另行猜后端、team id 或覆盖
-  endpoint，不允许重定向。自定义 HTTPS origin 必须由操作者在这份私有配置中显式信任。
-- `client_id` 只来自显式 `AGENTWATCH_CLIENT_ID` 或预配置/未来登录时持久化绑定；两者
-  都有时必须一致。没有内置值，不从 token 解码推导，也不伪造官方身份头。
-  client_id 只做本地绑定校验；RPC 只发送 Bearer，不把 client_id 当认证头发出。
-- `expires_at_ms` 是安全整数且必须晚于现在；本切片不会 refresh。缺失或过期须重新
-  provision 有效凭据；不使用 refresh_token。已运行 daemon 的 env 是启动时快照，文件则
-  每次请求重读。仅改 shell env 须先停止原 daemon 再启动；不会自动替换现有实例。
-- health 读取安全配置是否就绪：`bot_verifier:connect_http`、
-  `notification_transport:connect_http`，否则 `not_configured`。这不证明远端认证或 bot
-  权限有效。`test_only` 仅独立 testhost 使用，生产不会返回它。
+- 只读官方 Grok Bot 的 `sand-secrets.json`，解密后使用 access token。默认优先稳定版
+  「Grok Bot」，否则 「Grok Bot Research」。Linux 在 `$XDG_CONFIG_HOME` 或 `~/.config`
+  下；Windows 在 `%APPDATA%\Grok Bot`。测试可用 `AGENTWATCH_SECRETS_FILE` /
+  `AGENTWATCH_USER_DATA` 指向临时 fixture。
+- **绝不 refresh、绝不回写**官方文件或钥匙串。文件里即使有 refresh cipher 也不会拿去
+  `POST /oauth/token`，以免踢掉桌面应用登录。
+- 凭证缺失、解密失败或 access 已过期 → `AUTH_NOT_CONFIGURED` / exit 4，提示先打开并
+  登录官方 Grok Bot，不退回独立鉴权。
+- 在 Linux / Windows 调用 `login` / `logout` 必须失败（exit 4），并提示用官方桌面登录。
+- Connect 后端由 `AGENTWATCH_API_BASE`（默认 `https://api2.cursor.sh`）提供，属于
+  daemon 启动时的 env 快照；凭证文件则每次请求重读。
+- Linux 可用 Chromium basic_text 公开密码 `peanuts`（以及会话内 `secret-tool`）解密
+  OSCrypt v10/v11。Windows 已实现同用户 DPAPI 与匹配应用 Local State 的 OSCrypt-GCM；
+  密文只通过 PowerShell stdin，不进入 argv。Linux 上用注入 DPAPI + AES-GCM 夹具验收，
+  **未在真实 Windows 上验证**；未注入时非 Windows 宿主失败关闭，不冒称 native 验收。
+- 官方凭据目录不一定是 0700/0600；本工具不对官方文件做与自有凭证相同的权限强制，
+  但会拒绝 secrets 路径上的 symlink，并限制读取大小。
+
+`backend` 仅 HTTPS origin，本地 mock 额外允许 `http://127.0.0.1` / `[::1]`。已运行
+daemon 的 env 是启动时快照，独立凭证或官方 secrets 文件则每次请求重读。仅改 shell
+env 须先停止原 daemon 再启动。health 在凭证就绪时为 `bot_verifier:connect_http`、
+`notification_transport:connect_http`，否则 `not_configured`。这不证明远端已登录或
+bot 权限有效。`test_only` 仅独立 testhost 使用。refresh_token / verifier / access
+token 不会进入 stdout、stderr、health 或 argv（登录链接里的 challenge/uuid 是协议需要
+的公开查询参数，可以出现在 stderr 的 URL 中）。
 
 ## 内建身份门闩与 HTTP 边界
 
@@ -104,7 +161,8 @@ JSON；非 200 的 JSON `code` 错误只用受控码、不回显原始 body。�
 成鉴权失败。其它坏响应/传输错误 → `TRANSPORT_NOT_CONFIGURED` / 8。
 
 所有 RPC 使用 `Content-Type:application/json`、`Connect-Protocol-Version:1` 与 Bearer；
-3 秒绝对请求/响应读取超时、响应流解码后最大 1 MiB、禁重定向，结束/超限/取消均释放
+3 秒整体期限包含等待鉴权与请求/响应读取；已取消不启动 refresh，caller 取消只放弃自己的
+等待，已开始的共享 refresh 可后台写回成功旋转。响应流解码后最大 1 MiB、禁重定向，结束/超限/取消均释放
 响应 reader。不依赖 PATH，不启动网络 CLI，无 token argv，不转发后端异常或原始错误体。
 契约来源与 JSON/枚举映射见 `evidence/direct-http/upstream-contract.md`。
 
@@ -135,7 +193,7 @@ text 只有冻结的有界 JSON 六字段：version、event_id、task_id、state
   → unknown。只读状态 not_found/pending/unknown_durability、查询失败都不触发补发。
 - **后端错误体的 rpc_dispatched:false / retryable 不再是本地未 dispatch 证据**：HTTP
   已请求即可能发生副作用，即使 401/503 也不自动重试。当前直接适配器没有自动网络重试，
-  也未实现 token refresh；本地凭据加载失败保留 pending/NOT_CONFIGURED，不丢 outbox。
+  写 RPC 不会因为 refresh 自动重放；本地凭据加载失败保留 pending/NOT_CONFIGURED，不丢 outbox。
 - worker 保留本地可证明未 dispatch + 可重试的注入式结果契约；公共 engine/store seam
   验证最多 3 次总尝试、250/500ms 有界退避，预算/时间落盘，重启不重置。不把这个 DI
   测试说成 live 刷新重试已实现。生产 HTTP 错误绝不映射到该安全重试结果。
@@ -147,9 +205,11 @@ text 只有冻结的有界 JSON 六字段：version、event_id、task_id、state
   已读或任务业务成功证明；不承诺 exactly-once。drain 取消当前 HTTP、停止领取并有界
   落盘，不等无限网络；无凭据 pending 可在配置恢复后继续。
 
-本轮源码与编译合约均使用本地 loopback Connect mock + 临时 HOME/合成私有凭据；PATH
-只含 native shell fixture（编译测试没有工具链且暂移源码）。没有真实登录、refresh、
-真实后端请求、真实 bot 发信、真实 ~/.gbc/官方凭据读取或四家 CLI E2E。
+本轮源码与编译合约均使用本地 loopback Connect mock + 临时 HOME。Linux 生产路径用
+合成 sand-secrets（peanuts OSCrypt）夹具；macOS 独立登录/刷新在源码测试里注入
+`darwin`，不走生产 `--auth` 逃逸。PATH 只含 native shell fixture（编译测试没有工具链
+且暂移源码）。没有真实登录、真实 refresh、真实后端请求、真实 bot 发信、真实 ~/.gbc /
+官方凭据 / 钥匙串读取，或四家 CLI E2E。
 
 ## Service and storage boundaries
 
@@ -180,11 +240,14 @@ watchdog and a full contender retry pool are not in this slice.
 
 ## Explicit remaining gates
 
-Live direct identity/target/send verification, browser login and OAuth refresh, durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
+Live identity/target/send verification, live browser login and live OAuth refresh,
+durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
 production process-tree cancellation (.cmd / Windows included), redaction policy
 for potentially sensitive native output, disk retention, upgrades/distribution,
-and full multi-user/Windows ACL hardening remain unfinished. No production
-ready/supported-platform claim follows from Linux-only tests or OpenCode's usage.
+macOS flock / Windows LockFileEx live lock tests, and full multi-user/Windows ACL
+hardening remain unfinished or unverified here. Windows decryption is implemented
+but only fixture-tested, not native-verified here. No
+production ready/supported-platform claim follows from Linux-only tests.
 
 ## Review-fix log safety boundary
 

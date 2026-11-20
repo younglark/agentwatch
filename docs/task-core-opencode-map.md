@@ -1,6 +1,6 @@
 # 首批 task-core 切片：OpenCode v2 源码映射与任务
 
-**当前差异以末尾 t185 章节为准；以下首批和 t183 外部 CLI 路线保留为历史。**
+**当前差异以末尾 t186 登录/刷新与复审修复章节为准；首批、t183 和 t185 均保留为各轮历史边界。**
 
 日期：2026-11-20，Asia/Shanghai。依据当前完整实施计划 Page
 21811694-d2c2-469b-bd34-9bb2ffc50219；不是增加通用 PoC，也不重开
@@ -92,7 +92,7 @@ message status 对账。drain abort 并观察有界子进程退出。通知结�
 这是 agentwatch 的差异，不是新增通用 PoC；没有引入 gbc/proto/App 运行依赖，
 没有真实发送或凭据访问。ACK/去重仍未证明；当前细节以正式包 README/RESULTS 为准。
 
-## t185：内建直接 Connect/HTTP（当前，2026-11-20，Asia/Shanghai）
+## t185：内建直接 Connect/HTTP（历史，2026-11-20，Asia/Shanghai）
 
 用户纠正外部 CLI 路线：grokbot-control 只作协议/行为参考，不是运行依赖。
 移除 gbc-verifier 和所有生产 execFile/gbc PATH 查询；新 connect-client 是共享的
@@ -121,3 +121,34 @@ message status 对账。drain abort 并观察有界子进程退出。通知结�
 参考 tag npm-v0.7.0 = 097ed4fd107d1d7a92ef10f37b44b104edea1d70 的具体文件、
 JSON 编码与未证实边界见 packages/agentwatch/evidence/direct-http/upstream-contract.md。
 数量/完整验收日志见 RESULTS。本轮无真实后端、登录、refresh 或发送；独立复审仍待主线程。
+
+
+## t186：平台鉴权、独立登录/刷新与复审边界修复（当前，2026-11-20，Asia/Shanghai）
+
+本节覆盖 t185「无官方桌面凭据读取代码 / 无 refresh / 无登录」的当轮历史边界；
+这些表述不再代表当前正式包。原始 `src/` 仍是历史 PoC，不是正式包依赖。
+
+- 三端均保留任务 daemon；macOS 只用 agentwatch 自有独立鉴权，Linux/Windows 只读
+  官方 Grok Bot `sand-secrets.json` 的 access token，绝不 refresh 或写回官方会话。
+  Linux OSCrypt（basic_text / 会话 secret-tool）、Windows DPAPI 和匹配 Local State
+  的 OSCrypt-GCM 已实现；Windows 仅 Linux 上的注入夹具测试，不冒称 Windows native 通过。
+- macOS `login/logout` 经 daemon 完成，凭据默认 `~/.agentwatch/auth/credentials.json`
+  或 `AGENTWATCH_CREDENTIALS`；永不读官方 sand-secrets 或 macOS 钥匙串。CLI 无 TTY 时
+  stderr 打公开链接、stdout 一行 pending JSON 后立即返回，daemon 在后台继续轮询。
+  Linux/Windows 调 `login/logout` 返回鉴权退出码 4，提示使用官方桌面登录。
+- login begin / completion / logout 使用同一凭证锁与持久 generation/CAS，旧进程晚到的
+  poll 不能复活已 logout 或新 login 的会话。终止失败作废 pending 并可观测，后续可发新挑战。
+  单次 poll 10s（含 headers/body）、总体 20min，流读取有界并清理 reader。
+- 独立 refresh 在 exp 前 300s；client_id 仅显式配置或持久绑定，不从 JWT/App 猜测。
+  进程内 singleflight、原生 OS 咨询锁、锁下重读与原子写回。明确 shouldLogout/策略拒绝
+  优先于 429/5xx 及不明 timeout 的 invalid_grant 保护，绝不回退撤销 token。已有 subject
+  绑定时新 JWT 必须带匹配 sub，缺失或 opaque 不得降级覆盖。
+- Connect 整体 3s 包含鉴权等待；已取消请求不启动 refresh。单个 caller 放弃等待不取消
+  已启动的共享交换，后台可写回成功旋转。通知写不自动重放，通知失败不改变任务终态。
+- `DesktopAccess.source` 是解密来源，不再与 API backend 混名。实测 Bun 1.4.4 的
+  `new URL("http://[::1]").hostname` 为 `[::1]`，既有 IPv6 校验无错；补回归测试，未盲改。
+
+固定协议参考仍是 grokbot-control 的 auth-flow/auth-lock 资料，不调用 gbc、不打包官方
+App/proto。当前完整行为、测试数字、逐项 red/green 证据和未验收项见
+`packages/agentwatch/RESULTS.md` 与 `packages/agentwatch/evidence/login-refresh/spec-fixes/`。
+未用真实凭据或真实后端，未 live 登录/refresh/发信，不声称持久 ACK 或远端去重。

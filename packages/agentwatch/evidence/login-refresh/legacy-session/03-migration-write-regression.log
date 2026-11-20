@@ -1,0 +1,73 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth.test.ts:
+(pass) macOS login URL uses the cli preset and never includes the verifier or team param [0.50ms]
+(pass) injected darwin polls 404 then persists tokens, and stderr printing omits the verifier [10.29ms]
+(pass) injected darwin policy denial, xAI identity, timeout and consecutive poll errors fail closed [14.07ms]
+(pass) refresh rotates 300s early, persists the new pair, and keeps a still-valid token on network failure [5.79ms]
+(pass) expired token without client_id fails; valid token without client_id still works; client_id is never guessed from a JWT [1.18ms]
+(pass) shouldLogout does not fall back to the previous token, and a subject mismatch is refused [3.98ms]
+(pass) conflicting client id env vars fail closed and invalid_grant after an ambiguous timeout keeps credentials [2.45ms]
+(pass) write RPCs are not automatically replayed after a backend 401, even when refresh would succeed [2.78ms]
+(pass) Linux desktop reads a peanuts fixture, never refreshes, and macOS ignores sand-secrets overrides [3.85ms]
+(pass) independent credential reread after refresh is visible to the next request, and health never includes secrets [30.33ms]
+
+test/auth-legacy-session.test.ts:
+(pass) legacy credential without session_id: independent in-process sessions reuse one peer refresh [104.80ms]
+(pass) legacy credential without session_id: another Bun process reuses peer refresh with one exchange [234.77ms]
+(pass) waiting peer rejects real account instead of adopting a different session [104.93ms]
+(pass) waiting peer rejects real session instead of adopting a different session [104.54ms]
+(pass) waiting peer rejects real logout instead of adopting a different session [105.21ms]
+(pass) waiting peer rejects real logout-restored instead of adopting a different session [104.36ms]
+
+test/auth-refresh-interleavings.test.ts:
+(pass) Recheck1 old refresh revoked preserves a newer pending login in another process [129.67ms]
+(pass) Recheck1 old refresh success preserves a newer pending login in another process [118.78ms]
+(pass) Recheck1 old refresh transient preserves a newer pending login in another process [119.13ms]
+(pass) Recheck1 delayed old refresh revoked cannot overwrite or clear a completed new login [6.22ms]
+(pass) Recheck1 delayed old refresh success cannot overwrite or clear a completed new login [5.65ms]
+(pass) Recheck1 delayed old refresh transient cannot overwrite or clear a completed new login [3.93ms]
+(pass) Recheck2 native HTTP headers followed by stalled body respects 40ms deadline and records ambiguity [53.32ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit logout [44.97ms]
+(pass) Recheck2 body timeout then invalid_grant across session calls keeps credentials until explicit policy [44.99ms]
+(pass) Recheck2 headers connection interruption protects subsequent invalid_grant without leaking secrets [1.54ms]
+(pass) Recheck2 body connection interruption protects subsequent invalid_grant without leaking secrets [0.89ms]
+(pass) Recheck1 explicit logout during delayed revoked refresh cannot resurrect credentials or pending [4.49ms]
+(pass) Recheck1 explicit logout during delayed success refresh cannot resurrect credentials or pending [2.87ms]
+(pass) Recheck1 explicit logout during delayed transient refresh cannot resurrect credentials or pending [2.71ms]
+
+test/auth-boundaries.test.ts:
+(pass) Spec1 Windows DPAPI and Local State OSCrypt-GCM use access only, never expose a refresh cipher [1.78ms]
+(pass) Spec2 cross-process logout invalidates an in-flight login completion, including after new login [321.60ms]
+(pass) Spec3 explicit shouldLogout/policy outrank HTTP 429/5xx and ambiguous invalid_grant protection [11.08ms]
+(pass) Spec4 non-TTY login prints only a public URL to stderr and returns pending JSON promptly while daemon polls [233.77ms]
+(pass) Spec5 login HTTP bounds stalled headers and body, cancels readers, and has a total deadline including sleeps [126.54ms]
+(pass) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [48.72ms]
+146 |     const f=fixture();f.save({expires_at_ms:Date.now()-1});
+147 |     try{
+148 |       const before=readFileSync(f.file,'utf8');
+149 |       const session=createAuthSession({platform:'darwin',env:f.env,fetch:asFetch(async()=>Response.json({access_token:access,refresh_token:'NEW_SECRET_RT'}))});
+150 |       await expect(session.getAccessToken()).rejects.toMatchObject({details:{kind:'subject_mismatch'}});
+151 |       expect(readFileSync(f.file,'utf8')).toBe(before);
+                                                ^
+error: expect(received).toBe(expected)
+
+Expected: "{"version":1,"backend":"http://127.0.0.1:1","access_token":"eyJhbGciOiJub25lIn0.eyJzdWIiOiJvd25lciIsImV4cCI6MTc5NTE4NTI1M30.sig","refresh_token":"SECRET_RT","client_id":"explicit","expires_at_ms":1795185193711,"account_subject":"owner"}"
+Received: "{"version":1,"backend":"http://127.0.0.1:1","access_token":"eyJhbGciOiJub25lIn0.eyJzdWIiOiJvd25lciIsImV4cCI6MTc5NTE4NTI1M30.sig","refresh_token":"SECRET_RT","client_id":"explicit","expires_at_ms":1795185193711,"account_subject":"owner","session_id":"5fb184e3-edc1-4b4a-8384-9aa7f62d7410"}"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:151:43)
+(fail) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [1.80ms]
+(pass) Spec8 pre-canceled callers start no refresh; canceled caller detaches while shared refresh completes once [11.88ms]
+(pass) Spec8 Connect overall 3s deadline includes authentication; abandoned write is never dispatched or replayed [3023.30ms]
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.30ms]
+(pass) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [0.55ms]
+(pass) Spec8 cancel during credential lock wait is prompt and does not destroy shared refresh ownership [27.68ms]
+(pass) Spec3/8 refresh revocation or uncertain notification never alters task success or replays a send [85.67ms]
+
+1 tests failed:
+(fail) Spec7 bound subject cannot rotate to missing/opaque/different sub and binding cannot be dropped [1.80ms]
+
+ 42 pass
+ 1 fail
+ 337 expect() calls
+Ran 43 tests across 4 files. [5.38s]

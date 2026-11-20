@@ -1,0 +1,3 @@
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+test/auth-legacy-session.test.ts(33,60): error TS2339: Property 'value' does not exist on type '{ ok: boolean; value: Access; } | { ok: boolean; error: any; }'.
+  Property 'value' does not exist on type '{ ok: boolean; error: any; }'.

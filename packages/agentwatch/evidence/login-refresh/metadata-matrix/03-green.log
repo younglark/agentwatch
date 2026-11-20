@@ -1,0 +1,36 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+(pass) metadata matrix multi-session id=false binding=false accessSub=false reuses exactly one refresh [114.36ms]
+(pass) metadata matrix multi-session id=false binding=false accessSub=true reuses exactly one refresh [104.56ms]
+(pass) metadata matrix multi-session id=false binding=true accessSub=false reuses exactly one refresh [105.08ms]
+(pass) metadata matrix multi-session id=false binding=true accessSub=true reuses exactly one refresh [105.02ms]
+(pass) metadata matrix multi-session id=true binding=false accessSub=false reuses exactly one refresh [106.04ms]
+(pass) metadata matrix multi-session id=true binding=false accessSub=true reuses exactly one refresh [105.15ms]
+(pass) metadata matrix multi-session id=true binding=true accessSub=false reuses exactly one refresh [104.47ms]
+(pass) metadata matrix multi-session id=true binding=true accessSub=true reuses exactly one refresh [103.72ms]
+(pass) metadata matrix cross-process id=false binding=false accessSub=false reuses exactly one refresh [258.68ms]
+(pass) metadata matrix cross-process id=false binding=false accessSub=true reuses exactly one refresh [243.04ms]
+(pass) metadata matrix cross-process id=false binding=true accessSub=false reuses exactly one refresh [280.26ms]
+(pass) metadata matrix cross-process id=false binding=true accessSub=true reuses exactly one refresh [261.82ms]
+(pass) metadata matrix cross-process id=true binding=false accessSub=false reuses exactly one refresh [289.44ms]
+(pass) metadata matrix cross-process id=true binding=false accessSub=true reuses exactly one refresh [254.54ms]
+(pass) metadata matrix cross-process id=true binding=true accessSub=false reuses exactly one refresh [274.63ms]
+(pass) metadata matrix cross-process id=true binding=true accessSub=true reuses exactly one refresh [262.97ms]
+(pass) metadata unbound multi-session rejects account without a peer result from exact snapshot [104.72ms]
+(pass) metadata unbound multi-session rejects session without a peer result from exact snapshot [104.73ms]
+(pass) metadata unbound multi-session rejects backend without a peer result from exact snapshot [106.26ms]
+(pass) metadata unbound multi-session rejects client without a peer result from exact snapshot [104.07ms]
+(pass) metadata unbound multi-session rejects unproven-sub without a peer result from exact snapshot [105.78ms]
+(pass) metadata unbound multi-session rejects logout-restored without a peer result from exact snapshot [103.76ms]
+(pass) metadata unbound cross-process rejects account without a peer result from exact snapshot [274.94ms]
+(pass) metadata unbound cross-process rejects session without a peer result from exact snapshot [256.62ms]
+(pass) metadata unbound cross-process rejects backend without a peer result from exact snapshot [278.30ms]
+(pass) metadata unbound cross-process rejects client without a peer result from exact snapshot [256.60ms]
+(pass) metadata unbound cross-process rejects unproven-sub without a peer result from exact snapshot [245.32ms]
+(pass) metadata unbound cross-process rejects logout-restored without a peer result from exact snapshot [284.71ms]
+
+ 28 pass
+ 0 fail
+ 236 expect() calls
+Ran 28 tests across 1 file. [5.32s]

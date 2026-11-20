@@ -1,0 +1,2 @@
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+exit 0

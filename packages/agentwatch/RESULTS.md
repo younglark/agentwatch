@@ -1,7 +1,286 @@
-# t185：内建直接 Connect/HTTP — current
+# t186 完整可选元数据迁移矩阵与精确 peer 后继 — current
+
+2026-11-20，Asia/Shanghai，基线仍 `b52ba5e`；只改工作树，未 commit/push/git config。
+当前边界以本节与 README 为准；下方记录保留历史，不再将仅 session_id 修复称为完整迁移覆盖。
+
+## P2：旧 token 无可解析 sub，首次轮换补齐账号绑定（关闭）
+
+原实现仍按 subject 严格相等识别 peer；旧快照没有 account_subject 且旧 access 是 opaque /
+没有 sub 时，首次刷新得到新 JWT sub 会造成等待者误判。不能直接放宽 subject/session 比较。
+
+先新增公开 `getAccessToken` 边界的 28 项测试：
+- `01-red.log`：包含 2 个错误使用 localhost（不在 numeric loopback 白名单）的夹具失败；
+  不把这 2 个误报当功能 red。修正为另一个真实本地数字 loopback 服务后重跑，才写实现。
+- `02-red-corrected-backend-fixture.log`：22 pass / 6 fail。4 项无绑定旧 opaque token 首次
+  得到 sub（session_id 有/无 × 同进程/真实子进程）失败；同时发现旧等待路径还会采用变更的
+  client_id（2 项）。backend/session/account/logout 反例在有效夹具下保持拒绝。
+- `03-green.log`：28 pass / 0 fail。随后扩大边界至 56 项，见 `04-expanded-green.log`。
+
+### 统一迁移条件（不是逐字段宽松匹配）
+
+1. 初始完整规范化凭据、generation、显式解析 client_id 同 mutation 锁读取；交换锁下重读。
+2. 等待者仅采用：完全相同的初始快照，或带有效本机 `refresh_proof` 的**直接一次**后继。
+3. 成功刷新写回前，在既有自有凭据文件写入 parent/result SHA-256 关联：parent 包含完整旧
+   凭据（包括原 session、subject、token pair、backend、client、expiry、revision、source、
+   updated_at 和旧关联摘要）、generation、client 绑定；result 包含完整新结果，仅排除摘要自身。
+4. 另有显式约束：新 session 必须保留旧 ID 或是完整旧快照的稳定迁移 ID；backend 必须同
+   origin（允许原有 URL 规范化）；client 必须同初始显式绑定；revision 必须恰好加一。
+   已绑定 subject 不得变更/删除；未绑定时，仅可补齐为收到的新 access JWT sub，不能凭空填账号。
+5. 缺关联、关联来自别的完整快照/generation、结果被修改、账号/session/backend/client 更换
+   或 logout 均拒绝，不自动采用新会话，不重放交换。写回 CAS 仍比较全部规范化字段。
+6. 新 login 不继承 refresh 关联；失败刷新不写任何关联或补齐元数据，原文件不变。
+
+摘要是本机受保护文件内的 CAS 关联，不是远端身份签名/密码学认证。只保留直接后继，不保存
+无限祖先链；若等待者已错过多次轮换而无法证明，失败关闭，不猜测换账号。升级仍应停旧 daemon，
+避免与不写新关联元数据的旧版本同时操作同一凭据目录。
+
+### 最终 56 项新增边界
+
+- 32 正例：session_id 有/无 × 存储的 account_subject 有/无 × access sub 可解析/缺失，
+  同进程及跨进程各跑完整 8 组合，并扩展 opaque / JWT 无 sub、返回仍无 sub、env-only / stored
+  client 绑定、旧 backend 尾斜杠规范化。全部只能一次 HTTP exchange，peer 返回同一个新 token；
+  跨进程用仅 test child 识别的预期 SHA-256 校验实际 token，仍只输出布尔值，不输出 token/hash。
+- 12 更换反例：两种拓扑各覆盖账号、session、backend、client、无证明的 subject 补齐、logout
+  后还原旧文件；不重写新凭据、不向替换 backend 发请求、不采用新账号。
+- 12 关联反例：使用一次真实 mock 刷新产生的关联，再分别改变初始旧快照、generation、结果
+  access（同 sub、只变签名字符串）、结果 refresh、parent hash、result hash。两种拓扑均拒绝，
+  不额外交换，保存文件不变。不是由测试重算同一算法来证明自己。
+
+## 最终完整复测
+
+证据目录：`evidence/login-refresh/metadata-matrix/`。
+- typecheck：通过；production / test-host 编译：通过。
+- 源码：**202 pass / 0 fail，1533 assertions，101.36s**（7 文件）。
+- 编译产物：**74 pass / 0 fail，578 assertions，36.78s**。
+- `git diff --check`：通过；源码已恢复，无编译暂存目录，无残留测试 daemon/任务/child。
+- `boundaries-final.log` 摘录新增56项；完整日志为 final-*；产物及本轮源码 hash、清理和
+  时间见 `final-manifest.json`、`cleanup-audit.json`。
+第一次全套通过后又强化子进程“实际 token 必须一致”的断言，原日志保留为 pre-exact-token-*；
+最终数字只采用强化断言后重跑的 final-*，不拿先前通过替代新断言。
+
+## 不变限制
+
+未访问真实官方文件、~/.gbc、钥匙串或真实后端，未 spawn gbc；未原生 Windows/macOS 验收。
+Linux/Windows 桌面鉴权仍不 refresh/不回写。通知写不因刷新重放，通知失败不改任务终态。
+模糊交换保护仍仅同进程 120 秒、未持久化：另一进程/重启遇实际已旋转的旧 token 可得到
+invalid_grant 并需重新登录。本轮成功刷新关联不记录未知交换，不扩展该恢复能力，不新增状态文件。
+
+---
+
+# t186 旧凭据缺 session_id 的并发迁移 — 历史定向复核记录
+
+2026-11-20，Asia/Shanghai；仍基于 `b52ba5e` 的未提交工作树。本节及 README 是当前边界；
+下方早期 Spec 记录保留为历史。当前完整边界以文首最新章节与 README 为准。未 commit/push，未修改 git config，没有真实凭据/后端访问。
+
+## P2 修复与逐项证据
+
+合法旧凭据缺可选 `session_id` 时，首次 refresh 原先随机生成 ID；同进程另一 auth session
+或另一进程已读取旧文件，拿到 exchange 锁后误判换会话，无法复用 peer 的轮换。
+
+- 先新增公开 `getAccessToken` 边界测试：`01-red.log` 复现两个独立 session 一成功一失败。
+- 最终实现：没有显式 session_id 时，以完整规范化旧凭据快照（版本、backend、账号绑定、
+  token pair、client_id、expiry、updated_at、revision、source）推导 namespaced SHA-256 迁移 ID。
+  仅成功轮换写入既有 session_id 字段，后续轮换沿用；新 login 仍生成独立随机 ID。
+  等待者比较明确 ID / 精确旧快照推导 ID，**不忽略 session_id、不仅按账号匹配**。
+- 初始 credential/generation 在短 mutation 锁下读取；取 exchange 后仍核对 generation、
+  session、账号，写回仍做完整 CAS。先校验安全凭据路径，再进入会创建/收紧锁目录的 helper，
+  保留原所有权、symlink、权限等拒绝行为。
+- 新增 `test/auth-legacy-session.test.ts` 共 **12 项**：同进程/真实 Bun 子进程各有一次 exchange
+  的正例；两种拓扑各有换账号、相同账号但不同显式 session、另一个无 ID 的不同旧快照、
+  logout、logout 后还原完全相同旧文件的反例。反例不采用新会话、不重放 exchange、不改新文件。
+  子进程只输出成功/安全错误码，不含 token。
+
+`02-baseline-sensitivity.log` 是初次 red/green 后，将新增 6 项边界回放到修复前加载逻辑的
+敏感性检查（不是冒称先写的 TDD red）：同进程与跨进程正例均失败，logout 后还原文件反例
+也失败。中间曾尝试提前写随机 ID，`03-migration-write-regression.log` 发现它破坏 subject
+不匹配时原文件不变的旧保证；已放弃，改为上述仅成功保存方案。保留两次测试 host 类型修正
+的中途 typecheck 日志，不将它们当作功能 red。最终证据以 final-* 为准。
+
+## 最终完整复测
+
+日志：`evidence/login-refresh/legacy-session/final-{typecheck,source,build,compiled}.log`。
+- typecheck：通过；production / test-host 编译：通过。
+- 源码：**146 pass / 0 fail，1073 assertions，85.57s**（6 文件）。
+- 编译产物：**74 pass / 0 fail，578 assertions，38.99s**。
+- `git diff --check`：通过；源码目录恢复，无编译暂存目录，无残留本轮测试任务进程。
+- 清理、时间、产物及本轮源码 hash 见 `cleanup-audit.json`、`final-manifest.json`。
+- 新 12 项的最终通过摘录见 `boundaries-final.log`，完整源码日志含全部旧边界及通知不重放回归。
+
+## 明确限制（不扩大持久化范围）
+
+模糊 refresh 交换保护依旧仅同一进程内 120 秒，**未持久化、不是跨进程保护**。
+另一进程或 daemon 重启后，若上次请求实际已旋转 refresh token，旧 token 可能返回
+`invalid_grant`，凭据可能按撤销处理并需要重新登录；不承诺跨进程/重启恢复模糊交换。
+没有新增 journal/保护状态文件。Linux/Windows 桌面鉴权仍只读 access、不 refresh、不写官方文件。
+未真实登录，也未原生 Windows DPAPI/macOS flock 实机验收；通知写不因 refresh 重放，
+通知失败不改变任务终态的现有契约保留。
+
+---
+
+# t186 Spec 复核：刷新与新登录交错、响应体模糊交换 — 历史复核记录
+
+2026-11-20，Asia/Shanghai。基线仍 `b52ba5e`，只改工作树；没有 commit/push/git config 修改。
+原 8 项直接路径和 Standards 已关闭，本节记录复核新发现 2 项；不是用旧通过数字替代新边界。
+本节为上一轮复核历史，当前完整边界以文首最新章节及 README 为准。
+
+## 新发现逐项 red → green
+
+### Recheck1：旧 refresh 撤销误删新 login pending（P1，关闭）
+
+新增 `test/auth-refresh-interleavings.test.ts`：真实 Bun 测试子进程持有新 login poll，
+父进程对保留的旧 token 返回 shouldLogout。`01-red.log` 直接复现 pending 文件被删；
+其余延迟 refresh 的成功/撤销/503 情形也证明旧全程 mutation 锁会阻塞新 login。
+
+实现 `credentials-refresh.lock`（exchange）与 `credentials.lock`（短 mutation）分离：
+refresh 持 exchange，短暂持 mutation 读取快照；HTTP 不持 mutation；响应后重取 mutation，
+核对 session、revision、backend、token pair、expiry/updated_at 及持久 login generation CAS。
+login/logout 只持 mutation，不反向取 exchange。旧结果遇新 session/generation 时失败关闭，
+不返回新账号 token 给旧请求，不覆盖/清理新凭据。撤销仅 `clearCredentialIfUnchangedUnlocked`
+清旧凭证文件，绝不删 pending/generation；显式 logout 仍负责推进 generation 并清相应登录。
+所有锁文件永久存在，不 stale-break/unlink。
+
+`01-green.log` 中 6 项交错通过：旧 refresh success/revoked/503 保留另一真实进程的 pending，
+随后该进程成功存入新账号凭证；另测新 login 在旧交换延迟时先完成，晚到旧成功/撤销/503
+均不得覆盖/清除新凭据。最终套件另加 3 项显式 logout 后晚到旧结果不可复活的边界。
+
+### Recheck2：headers 后 body 超时被吞为 malformed（P2，关闭）
+
+`02-red.log`：本地真实流式 HTTP，headers 立即返回、body 卡住，40ms 后旧实现给 malformed；
+headers/body 连接中断后的 invalid_grant 还会被当撤销。新 5 项测试均先复现失败。
+
+refresh 改用既有 `fetchJsonBounded`，20s 同时约束 headers 和流式 body，限制响应大小并清理
+reader；body 超时/连接中断不再被 `response.json().catch` 吞掉，所有不能确认交换结果的
+传输失败均标记该 session/refresh-token 为 ambiguous。后续无显式撤销的 invalid_grant
+保留凭据（若旧 access 有效可返回，否则鉴权失败但文件不清）；shouldLogout/策略拒绝
+仍高于 429/5xx 与模糊保护。`02-green.log` 完成 40ms native HTTP、reader cancel、跨调用
+invalid_grant 保留、之后明确 shouldLogout/策略撤销清理、headers/body 连接中断矩阵。
+错误对象/测试子进程输出不含合成 token 等秘密；无真实后端或凭据。
+
+## 最终完整复测
+
+完整串行验证日志在 `evidence/login-refresh/spec-recheck/`：`final-typecheck.log`、
+`final-source.log`、`final-build.log`、`final-compiled.log`。
+
+- typecheck：通过（`tsc6 --noEmit`）。
+- 源码：**134 pass / 0 fail，981 assertions，86.92s**（5 文件）。
+- production 与 test-host 编译：通过。
+- 编译产物：**74 pass / 0 fail，578 assertions，39.02s**。
+- `git diff --check`：通过；`src` 已恢复，无 `.compiled-test-src`，无残留本轮测试任务进程。
+- 时间、产物 hash 与清理审计见 `final-manifest.json`、`cleanup-audit.json`。
+本轮新套件包含 14 个边界（9 项登录/刷新交错、5 项 HTTP 模糊交换），不是旧测试计数。
+保留一次测试 adapter 缺少 fetch.preconnect 类型的中途 typecheck 错误，修正签名后重跑；
+它不作为功能 red 或最终通过证据。
+
+## 未验收与保持的边界
+
+没有新增真实账号/后端访问，没有读真实 ~/.gbc、官方 sand-secrets 或钥匙串，没有 spawn gbc。
+Windows/macOS 原生验收局限不变：Windows DPAPI/GCM 只有 Linux 注入夹具，macOS flock
+未实机跑。Linux/Windows 官方桌面 token 仍不 refresh、不回写。通知不因 refresh 重放，
+失败不改任务终态。新旧鉴权锁协议不要对同一凭据目录混跑，升级应先停旧 daemon。
+
+---
+
+# t186 独立 Spec 8 项修复与 Standards 补充 — 首次复审记录
+
+2026-11-20，Asia/Shanghai。仍基于 `b52ba5e`，只修改工作树；不 commit / push，不修改 git config。
+本节为首次复审历史；当前边界以文首最新章节与 README 为准。下面的初次实现 107 项通过**不代表**这 8 个边界正确；
+独立复审后逐项新增失败测试、再修实现，证据保留在 `evidence/login-refresh/spec-fixes/`。
+
+## 逐项 red → green（不是用旧测试替代）
+
+| 项 | 新边界与 red 现象 | 实现 / green 断言 | 日志 |
+|---|---|---|---|
+| Spec1 Windows | 注入 Windows DPAPI 夹具，原先无条件拒绝 | 同用户 DPAPI + 匹配 secrets 所在目录 Local State 的 DPAPI-wrapped AES-256-GCM；直接与 GCM 两种格式返回 access；损坏/无密钥拒绝；不解密 refresh | `01-red.log` / `01-green.log` |
+| Spec2 跨进程 login/logout | 真 Bun 子进程 A 的 poll 被 barrier 挡住，B logout 后释放 A，原先 `completed:true` 复活 | login begin / completion / logout 同 OS 锁；持久 generation + pending uuid/verifier CAS。logout 以及 logout→新 login 均使 A 失败且无凭据复活 | `02-red.log` / `02-green.log` |
+| Spec3 撤销优先级 | 模拟 shouldLogout + invalid_grant 的不明超时窗，原先 resolve/fallback | 明确 shouldLogout/策略拒绝先于 429/5xx/invalid_grant 保护；5 HTTP status × 3 撤销 body 均拒绝、清凭证、canFallback=false | `03-red.log` / `03-green.log` |
+| Spec4 无 TTY | 真实 CLI testhost stdin=ignore，原先 900ms 上限内不返回（被测试终止） | stderr 仅公开 URL，stdout 一行 pending JSON，立即成功返回；daemon 仍 pending 后台 poll | `04-red.log` / `04-green.log` |
+| Spec5 poll 有界 | headers 永不返回，原先 `hung` | 单次 10s/总计20min；注入30/35ms测试 stalled headers、200/403 stalled body、卡住的 sleep；均期限内失败/timeout，reader 被 cancel，不泄露 verifier | `05-red.log` / `05-green.log` |
+| Spec6 失败状态 | 原先 terminal failure 仍显示 pending | 同 generation 条件清 pending，持久安全失败状态；策略/xAI/连续错误/次数耗尽均可观测；peer 后续 login 得新 uuid | `06-red.log` / `06-green.log` |
+| Spec7 subject 绑定 | opaque 新 access 原先覆盖已绑定账号 | 已绑定 sub 时，新 JWT 必须有相同 sub；opaque/缺失/其他 sub 拒绝且原文件不变；匹配 sub 成功并保留未轮换 refresh | `07-red.log` / `07-green.log` |
+| Spec8 caller 取消 | pre-abort 原先 `hung`，Connect 等 auth 直到20s | 预取消不启动 refresh；caller 取消只放弃等待，不中止共享交换；Connect 总3s覆盖鉴权等待；后台成功写回且通知写0次。另测锁等待取消后同一次共享 rotation 完成 | `08-red.log` / `08-green.log`、`boundaries-green.log` |
+
+补充引擎/outbox集成：独立 refresh shouldLogout 使通知保持 pending，或 refresh 成功后
+通知返回401使通知 unknown；两种情况下任务仍 succeeded、refresh一次、send分别0/1次，
+不重放写。`test_only` 仍只用于测试适配器；没有新增生产 auth mode 环境开关。
+
+## Standards 补充
+
+- 根 README 正式包导语与 `docs/task-core-opencode-map.md` 最新导引/新增 t186 章节已更新；
+  t185 的「无官方读取代码/无refresh/无登录」保留为**历史当轮**边界，不再冒充当前状态。
+- 实跑 Bun 1.4.4：`new URL('http://[::1]').hostname === '[::1]'`；reviewer 的 IPv6
+  不一致推断不成立，不改原正确校验。新增允许 IPv6 numeric loopback、拒绝其他 HTTP host
+  的回归，见 `ipv6-runtime.json` / `standards-red.log` / `standards-green.log`。
+- `DesktopAccess.backend` 改名 `source`（解密来源）；不再解析 refresh cipher；删除未使用的
+  `loadCredentials` 导出与 `MAC_PBKDF2_ITERATIONS`。不做无关重构。
+
+## 最终验证
+
+最终整包 `typecheck → test → build → build:test-host → compiled.test.ts` 串行 **exit 0**：
+
+| 套件 | 结果 | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| typecheck | PASS | — | — |
+| 源码（4文件） | 120 pass / 0 fail | 895 | 86.96s |
+| 编译隔离合约 | 74 pass / 0 fail | 578 | 39.33s |
+
+完整日志：`final-typecheck.log` / `final-source.log` / `final-build.log` / `final-compiled.log`。
+编译合约复制二进制到隔离目录、暂移源码后恢复；不把 Linux 编译验收当成 macOS/Windows
+native 证明。单独新边界套件：
+13 pass / 0 fail，133 expects。先前一次完整回归已通过（含编译74项），但该次源码运行
+开始后才补入 Standards 与两项集成测试，所以**不拿它替代最终整包复测**。
+最终 `git diff --check` 通过，HEAD 保持 b52ba5e，`cleanup-audit.json` 中无本轮存活任务/测试进程，源码已复原。
+一次与 compiled 暂移源码重叠的边界重跑在 import 阶段失败，原样保留
+`boundaries-overlap-error.log`；待源码复原后重跑通过，不把这个工具编排错误当成产品 red。
+
+## 未解决 / 未实机验收
+
+8 项报告缺陷均已按对应边界测试修复；Windows 实现不是 native 验收：仅 Linux 上注入
+DPAPI 系统调用与合成 AES-GCM 密文。未在真实 Windows 跑 PowerShell/DPAPI、NTFS ACL；
+未在真实 macOS 跑 flock/login CLI。JWT sub 是协议中未验签的本地连续性约束，并不声称
+本地密码学验签。没有真实 Cursor/IdP/发信请求，没有读真实凭据/钥匙串，没有 spawn gbc。
+Windows 独立凭证/LockFileEx 不在生产独立鉴权路径，仍无 Windows native 锁验收；
+Linux/Windows 只读桌面会话，不 refresh、不回写官方文件。任务日志跨平台硬化等既有门槛不变。
+
+---
+
+# 登录与令牌刷新（平台写死）— 初次实现记录（已由顶部复审修复取代）
+
+2026-11-20，Asia/Shanghai。基线 `b52ba5e`（feat/bun-task-core，本地 ahead 4）。未 push、未改 git config、未 commit。
+
+## 结果
+
+按平台写死鉴权，没有生产 `--auth` / `AGENTWATCH_AUTH_MODE`。macOS 走独立登录与 refresh；Linux / Windows 只读官方 Grok Bot `sand-secrets.json`，绝不 refresh 或回写，以免踢掉桌面登录。三端都保留任务 daemon。`grokbot-control` 只作协议参考，不调用外部 `gbc`，不把官方 App / proto 打进可执行文件。
+
+- 新 `src/auth/`：platform、login URL/poll、独立 store、OS 咨询锁（Linux OFD，macOS flock 已写、此处未在真实 macOS 跑）、refresh 状态机（提前 300s、锁下重读、singleflight、shouldLogout 不回退、网络/5xx/429/超时可回退仍有效的旧 token、不明 timeout 后 invalid_grant 不清凭证、account subject 不匹配拒绝转换）、Linux peanuts / secret-tool 解密与 Windows 路径解析。
+- `agentwatch login` / `logout` 仅 macOS 有效：login 确保 daemon、stderr 立即打出 `loginDeepControl?redirectTarget=cli`（无 team 参），daemon 轮询并落盘；logout 只清自有凭据。Linux / Windows 上这两条命令 exit 4。
+- 已运行 daemon 的 env 是启动时快照；独立凭证和官方 secrets 文件每次请求重读。health 就绪时仍为 `connect_http`，不证明远端已登录。写 RPC 不因 refresh 自动重放；通知失败不改任务终态。
+- Linux 上现有 command-contracts 改为桌面夹具（临时 `sand-secrets` + peanuts，`AGENTWATCH_API_BASE` 指向 loopback mock）。独立凭证安全检查和登录/刷新矩阵在 `test/auth.test.ts` 中通过注入 `darwin` 覆盖。`test_only` 仍只属于 testhost。
+
+## TDD / 回归证据
+
+`bun run typecheck` 通过。全部使用 mock HTTP / 临时 HOME / fixture，未读真实凭证，未访问真实后端。
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| typecheck | pass | — | ~2.4s |
+| 正式源码 | 107 / 0 | 762 | 89.79s |
+| 正式编译 | 74 / 0 | 578 | 41.27s（含构建后的 compiled.test.ts） |
+
+生产产物 110,000,304 bytes，test-host 109,684,912 bytes。日志在 `evidence/login-refresh/`。没有 live 验证成功的声称。
+
+## 未做 / 未 live 验证
+
+- 未连接真实 Cursor / 后端登录，未 refresh 真实 token，未读取真实 `~/.gbc`、官方 sand-secrets 或钥匙串，未 spawn `gbc`。
+- 未在真实 macOS 上跑 login CLI、钥匙串拒绝路径或 flock 锁。
+- 未在真实 Windows 上验证 DPAPI / OSCrypt-GCM 解密、LockFileEx 或 ACL；当前在非 Windows 宿主上失败关闭。
+- 未把独立 refresh 对真实 IdP 做 live 验证；mock HTTP 不是协议 live 证据。
+
+---
+
+# t185：内建直接 Connect/HTTP — historical
 
 2026-11-20，Asia/Shanghai。固定基线 `c378e8f`；用户明确纠正 gbc 仅作参考。
-本节和 README 为当前边界；以下所有 t183 外部 CLI 章节只保留历史证据。
+本节只记录 t185 当轮边界；当前以文件顶部 t186 复审修复与 README 为准。t183 外部 CLI 章节同为历史证据。
 
 ## 结果与保持的语义
 

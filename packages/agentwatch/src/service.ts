@@ -1,6 +1,7 @@
 import { connectNotifications,type NotificationTransport } from './notifications.ts';
 import { verifyConnect } from './connect-verifier.ts';
 import { connectReady } from './connect-client.ts';
+import { beginLogin,loginStatus,logout } from './auth/session.ts';
 import { Schema } from 'effect';
 import { Database } from 'bun:sqlite';
 import { mkdirSync,realpathSync,lstatSync,writeFileSync,renameSync,readFileSync,unlinkSync,openSync,closeSync,constants,appendFileSync } from 'node:fs';
@@ -14,7 +15,7 @@ import { nativeExecutor,type Executor,type Verifier } from './process.ts';
 export const VERSION='0.1.0';
 export const Registration=Schema.Struct({version:Schema.String,protocol:Schema.Number,instance:Schema.String,scope:Schema.String,pid:Schema.Number,port:Schema.Number,token:Schema.String});
 export type Registration=typeof Registration.Type;
-const Message=Schema.Struct({operation:Schema.Literals(['health','run','status','logs','wait','cancel','drain','shutdown']),data:Schema.Unknown});
+const Message=Schema.Struct({operation:Schema.Literals(['health','run','status','logs','wait','cancel','drain','shutdown','login','login_status','logout']),data:Schema.Unknown});
 const pause=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 export function privateState(path:string) {
   mkdirSync(path,{recursive:true,mode:0o700});const state=realpathSync(path),stat=lstatSync(state);
@@ -98,6 +99,9 @@ export async function startDaemon(path:string,adapters:Adapters=productionAdapte
         try{message=Schema.decodeUnknownSync(Message)(await req.json());}catch{throw new CoreError('USAGE','Invalid local request');}
         const data=message.data as Record<string,unknown>,op=message.operation;
         if(op==='health')return result({pid:process.pid,instance,scope,protocol:PROTOCOL,version:VERSION,bot_verifier:adapters.testOnly?'test_only':connectReady()?'connect_http':'not_configured',notification_transport:adapters.notifications?.available()?'connect_http':'not_configured'});
+        if(op==='login')return result(await beginLogin());
+        if(op==='login_status')return result(loginStatus());
+        if(op==='logout')return result(await logout());
         if(op==='run')return result(await engine!.run(data));
         if(op==='drain')return result(await engine!.drain());
         if(op==='shutdown'){setTimeout(()=>{void close();},30);return result({stopping:true,pid:process.pid});}

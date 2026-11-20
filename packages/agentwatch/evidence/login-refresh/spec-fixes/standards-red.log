@@ -1,0 +1,33 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+(pass) Standards Bun URL.hostname includes IPv6 brackets and numeric IPv6 loopback is allowed, not arbitrary HTTP [0.47ms]
+212 |   const f=fixture();
+213 |   try{
+214 |     const file=join(f.root,'sand-secrets.json');
+215 |     writeFileSync(file,JSON.stringify({'cursor-accounts':{accounts:{one:{'cursor-access-token':Buffer.from('fixture-access').toString('base64'),'cursor-refresh-token':'SECRET_UNUSED'}}}}));
+216 |     const result=loadDesktopAccess({platform:'win32',env:{...f.env,AGENTWATCH_SECRETS_FILE:file},windows:{unprotect:()=>Buffer.from('SYNTHETIC_ACCESS_TOKEN')}});
+217 |     expect(result).toMatchObject({source:'windows-dpapi'});
+                         ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "source": "windows-dpapi",
++   "backend": "windows-dpapi",
++   "expiresAtMs": undefined,
++   "secretsPath": "/tmp/aw-auth-boundary-ud4OXk/sand-secrets.json",
++   "token": "SYNTHETIC_ACCESS_TOKEN",
++   "variant": "override",
+  }
+
+- Expected  - 1
++ Received  + 5
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:217:20)
+(fail) Standards desktop result names encryption provenance as source, not API backend, and omits refresh cipher [2.05ms]
+
+ 1 pass
+ 9 filtered out
+ 1 fail
+ 8 expect() calls
+Ran 2 tests across 1 file. [136.00ms]

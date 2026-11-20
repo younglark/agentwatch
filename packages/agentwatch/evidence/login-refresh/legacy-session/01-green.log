@@ -1,0 +1,9 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-legacy-session.test.ts:
+(pass) legacy credential without session_id: independent in-process sessions reuse one peer refresh [111.88ms]
+
+ 1 pass
+ 0 fail
+ 7 expect() calls
+Ran 1 test across 1 file. [225.00ms]

@@ -1,0 +1,101 @@
+{
+  "verified_at": "2026-11-20T22:51:25.012534+08:00",
+  "zone": "Asia/Shanghai",
+  "head": "b52ba5e838930931e9ad93e96665cb80d99281cc",
+  "bun": "1.4.4",
+  "typecheck": "pass",
+  "source": {
+    "pass": 202,
+    "fail": 0,
+    "assertions": 1533,
+    "files": 7,
+    "seconds": 101.36
+  },
+  "compiled": {
+    "pass": 74,
+    "fail": 0,
+    "assertions": 578,
+    "seconds": 36.78
+  },
+  "build": "production and test-host pass",
+  "new_boundary_tests": {
+    "positive_matrix": 32,
+    "binding_replacement": 12,
+    "receipt_tampering": 12,
+    "total": 56
+  },
+  "red": {
+    "log": "02-red-corrected-backend-fixture.log",
+    "pass": 22,
+    "fail": 6,
+    "matrix_failures": 4,
+    "client_binding_failures": 2
+  },
+  "diff_check": "pass",
+  "cleanup": "cleanup-audit.json",
+  "artifacts": {
+    "dist/agentwatch": {
+      "bytes": 110012592,
+      "sha256": "ad5c98aac9a46e25b83dbee96b41108313c4ac3a0dc6e719cf52e3e8cf0fb362"
+    },
+    "dist/test-host": {
+      "bytes": 109697200,
+      "sha256": "16079688eeb1d7500e7b863b7a111eb4bd8ffce8816d498509fd2a231519bde3"
+    },
+    "src/auth/store.ts": {
+      "bytes": 14579,
+      "sha256": "fc5eff1f219a459ab6c855245dfb9613c4d451db7e0c4a7ba443223d40417ca0"
+    },
+    "src/auth/session.ts": {
+      "bytes": 11370,
+      "sha256": "b42d4eb7b52c851c91374f06ea366b84616f2bd6e2a0df256378e7d9c5fd0828"
+    },
+    "test/auth-metadata-migration.test.ts": {
+      "bytes": 10171,
+      "sha256": "f8f9a40a981394c4485a9059a0b0a39aea206226b1e87af78c56950d106c707d"
+    },
+    "test/auth-legacy-child.ts": {
+      "bytes": 700,
+      "sha256": "505bbe173cb8c2209b712c92e4141f5a3a9395599d2103fef82a966c8ea7be6a"
+    },
+    "package.json": {
+      "bytes": 1255,
+      "sha256": "bfdd5987ae33a373f6a5755e50e6ac85b7511566a89b9ff9a85004e1ad4837c5"
+    },
+    "README.md": {
+      "bytes": 20312,
+      "sha256": "33ce6b5141b3504ee7ebeae05507a502e1bb79867290746b7b8ad822da967886"
+    },
+    "RESULTS.md": {
+      "bytes": 53548,
+      "sha256": "c1cd7de5ebcf9aebce6088901f1aaa13737e6ebd6a9a61539ff1b403c76dd8c1"
+    }
+  },
+  "changed_this_round": [
+    "src/auth/store.ts",
+    "src/auth/session.ts",
+    "test/auth-metadata-migration.test.ts",
+    "test/auth-legacy-child.ts",
+    "package.json",
+    "README.md",
+    "RESULTS.md",
+    "evidence/login-refresh/metadata-matrix/"
+  ],
+  "commit": false,
+  "push": false,
+  "git_config_changed": false,
+  "live_backend_verified": false,
+  "native_windows_verified": false,
+  "native_macos_verified": false,
+  "limits": [
+    "Peer reuse requires a direct exact-snapshot successor receipt; no ancestry journal. More than one missed rotation fails closed.",
+    "Refresh receipt is local CAS provenance, not remote identity attestation.",
+    "Ambiguous-exchange protection remains in-process only, 120 seconds, not persisted or extended by successful-refresh receipts.",
+    "Another process or restart with an actually rotated old refresh token may receive invalid_grant and require login."
+  ],
+  "notes": [
+    "No real credential/backend access. All accounts/tokens fixtures, all HTTP local mock.",
+    "Initial red had 2 invalid localhost fixtures; corrected before implementation. Those are not counted as functional red.",
+    "Strengthened child exact-access-token assertion, then repeated complete verification; final-* is authoritative, pre-exact-token-* historical."
+  ]
+}

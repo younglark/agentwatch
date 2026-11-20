@@ -58,7 +58,7 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code,done.err).toBe(0);
     const lookups=h.calls.filter(c=>c.method==='ListGrokBotAgents');expect(lookups).toHaveLength(2);
     for(const call of lookups){expect(call.body).toEqual({});expect(call.authorization).toBe('Bearer SYNTHETIC_PRIVATE_TOKEN');expect(call.headers['connect-protocol-version']).toBe('1');expect(call.headers['content-type']).toBe('application/json');}
-    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('connect_http');expect(existsSync(join(h.bin,'gbc'))).toBe(false);
+    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('connect_http');expect(existsSync(join(h.bin,'gbc'))).toBe(false);expect(h.oauthCalls).toHaveLength(0);
   });
   for(const code of ['auth','unauthenticated','auth_revoked','auth_refresh_unconfigured','auth_refresh_client_mismatch','auth_refresh_subject_mismatch'])
     check(`direct Connect ${code} is auth unavailable before admission and launch`,async h=>{
@@ -89,21 +89,28 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const run=await h.call('run',['--bot','test-bot','--request-id',name,'--cwd',h.cwd,'--','claude']);expect(run.code,run.err).toBe(exit);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe(error);expect(ledgerRows(h.state,name)).toHaveLength(0);expect(run.err).not.toContain('SECRET_BODY');expect(Date.now()-started).toBeLessThan(8000);
     const health=await request(readRegistration(h.state)!,'health',{});expect(health.bot_verifier).toBe('connect_http');
   });
-  for(const mode of ['public-file','public-dir','symlink','hardlink','symlink-parent','oversized','expired','unbound-client','client-mismatch','unsafe-backend'] as const)
-    check(`agentwatch credentials ${mode} never reach HTTP or admission`,async h=>{
-      h.configureAuth();
-      if(mode==='public-file')chmodSync(h.credentials,0o644);
-      if(mode==='public-dir')chmodSync(join(h.home,'.agentwatch','auth'),0o755);
-      if(mode==='symlink'){const value=readFileSync(h.credentials);unlinkSync(h.credentials);writeFileSync(join(h.home,'synthetic'),value,{mode:0o600});symlinkSync(join(h.home,'synthetic'),h.credentials);}
-      if(mode==='hardlink')linkSync(h.credentials,join(h.home,'hardlink'));
-      if(mode==='symlink-parent'){renameSync(join(h.home,'.agentwatch'),join(h.home,'auth-real'));symlinkSync(join(h.home,'auth-real'),join(h.home,'.agentwatch'));}
-      if(mode==='oversized')writeFileSync(h.credentials,'x'.repeat(16385));
+  for(const mode of ['expired','unsafe-backend','secrets-symlink','missing-secrets'] as const)
+    check(`desktop credentials ${mode} never reach HTTP or admission`,async h=>{
+      if(mode!=='missing-secrets')h.configureAuth();
       if(mode==='expired')h.configureAuth({expires_at_ms:1});
-      if(mode==='unbound-client')h.configureAuth({client_id:null});
-      if(mode==='client-mismatch')h.env.AGENTWATCH_CLIENT_ID='other-client';
       if(mode==='unsafe-backend')h.configureAuth({backend:'http://example.invalid'});
-      const run=await h.call('run',['--bot','test-bot','--request-id',mode,'--cwd',h.cwd,'--','claude']);expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(h.calls).toHaveLength(0);expect(ledgerRows(h.state,mode)).toHaveLength(0);expect(run.err).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('not_configured');
+      if(mode==='secrets-symlink'){const value=readFileSync(h.credentials);unlinkSync(h.credentials);writeFileSync(join(h.home,'synthetic-secrets'),value,{mode:0o600});symlinkSync(join(h.home,'synthetic-secrets'),h.credentials);}
+      const run=await h.call('run',['--bot','test-bot','--request-id',mode,'--cwd',h.cwd,'--','claude']);expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(h.calls).toHaveLength(0);expect(h.oauthCalls).toHaveLength(0);expect(ledgerRows(h.state,mode)).toHaveLength(0);expect(run.err).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect(run.err).not.toContain('SECRET_DESKTOP_REFRESH');expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('not_configured');
     });
+  check('Linux production ignores independent credentials.json and does not refresh desktop tokens',async h=>{
+    mkdirSync(join(h.home,'.agentwatch','auth'),{recursive:true,mode:0o700});
+    writeFileSync(join(h.home,'.agentwatch','auth','credentials.json'),JSON.stringify({version:1,backend:`http://127.0.0.1:1`,client_id:'synthetic-client',access_token:'SECRET_INDEPENDENT_TOKEN',refresh_token:'SECRET_INDEPENDENT_REFRESH',expires_at_ms:Date.now()+60000}),{mode:0o600});
+    h.env.AGENTWATCH_CREDENTIALS=join(h.home,'.agentwatch','auth','credentials.json');
+    h.mockConnect();
+    const run=await h.call('run',['--bot','test-bot','--request-id','desktop-ok','--cwd',h.cwd,'--',h.nativeFixture()]);
+    expect(run.code,run.err).toBe(0);
+    expect((await h.call('wait',[run.value.data.id,'--timeout','5'])).code).toBe(0);
+    expect(h.oauthCalls).toHaveLength(0);expect(h.pollCalls).toHaveLength(0);
+    const lookup=h.calls.filter(c=>c.method==='ListGrokBotAgents');expect(lookup.length).toBeGreaterThan(0);
+    for(const call of lookup)expect(call.authorization).toBe('Bearer SYNTHETIC_PRIVATE_TOKEN');
+    const text=run.out+run.err+JSON.stringify(await request(readRegistration(h.state)!,'health',{}));
+    expect(text).not.toContain('SECRET_INDEPENDENT_TOKEN');expect(text).not.toContain('SECRET_INDEPENDENT_REFRESH');expect(text).not.toContain('SECRET_DESKTOP_REFRESH');
+  });
   check('client id may be explicitly configured but gbc files and GBT env are never consulted',async h=>{
     mkdirSync(join(h.home,'.gbc'));writeFileSync(join(h.home,'.gbc','credentials.json'),'SECRET_GBC_TOKEN',{mode:0o600});
     writeFileSync(join(h.bin,'gbc'),'#!/bin/sh\nexit 99\n',{mode:0o700});h.env.GBT_MOCK='1';
@@ -111,6 +118,17 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     h.mockConnect();h.configureAuth({client_id:undefined});h.env.AGENTWATCH_CLIENT_ID='explicit-client';
     const run=await h.call('run',['--bot','test-bot','--request-id','env-client','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code,run.err).toBe(0);expect((await h.call('wait',[run.value.data.id,'--timeout','5'])).code).toBe(0);
     expect(run.out+run.err+help.out+help.err).not.toContain('SECRET_GBC_TOKEN');
+    expect(h.oauthCalls).toHaveLength(0);
+  });
+  check('login and logout are rejected on desktop platforms',async h=>{
+    for(const command of ['login','logout']){
+      const result=await h.call(command,[]);
+      expect(result.code,result.err).toBe(4);expect(result.out).toBe('');
+      expect(JSON.parse(result.err).error.code).toBe('AUTH_NOT_CONFIGURED');
+      expect(result.err.toLowerCase()).toMatch(/official|desktop|grok bot/);
+      expect(result.err).not.toContain('verifier');expect(result.out+result.err).not.toContain('SECRET_');
+    }
+    expect(h.pollCalls).toHaveLength(0);expect(h.oauthCalls).toHaveLength(0);
   });
   check('direct notification acceptance persists once with frozen bounded request fields',async h=>{
     h.mockConnect();const args=['--bot','test-bot','--request-id','notify-accepted','--cwd',h.cwd,'--',h.nativeFixture(),'SECRET_ARGV'];
@@ -194,6 +212,7 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const host=(await h.startHost())!;const run=await h.call('run',['--bot','test-bot','--request-id','notice-unconfigured','--cwd',h.cwd,'--','claude']);expect(run.code).toBe(0);const id=run.value.data.id;
     expect((await h.call('wait',[id,'--timeout','5'])).value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});await request(host,'shutdown',{});await until(async()=>alive(host.pid),v=>!v,3000);
     expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0,event_id:id+':terminal:1'});expect(h.notificationCalls()).toHaveLength(0);
+    const mid=readRegistration(h.state)!;await request(mid,'shutdown',{});await until(async()=>alive(mid.pid),v=>!v,3000);
     h.mockConnect();const restored=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);expect(restored.value.data.notification).toMatchObject({event_id:id+':terminal:1',attempts:1});expect(h.notificationCalls()).toHaveLength(1);
   });
   for(const phase of ['send','status'] as const)check(`direct HTTP drain aborts hung ${phase} within bounded stop`,async h=>{

@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/auth-boundaries.test.ts:
+123 |     const session=createAuthSession({platform:'darwin',env:f.env,poll:{fetch,maxTries:2,sleep:async()=>{}}});
+124 |     try{
+125 |       const first=await session.beginLogin();
+126 |       await expect(session.waitForLogin()).rejects.toMatchObject({code:'AUTH_NOT_CONFIGURED'});
+127 |       await tick();
+128 |       expect(session.loginStatus().status).toBe('failed');
+                                                 ^
+error: expect(received).toBe(expected)
+
+Expected: "failed"
+Received: "pending"
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/auth-boundaries.test.ts:128:44)
+(fail) Spec6 terminal poll failure is observable, clears pending and a later login creates a fresh challenge [17.35ms]
+
+ 0 pass
+ 5 filtered out
+ 1 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [156.00ms]

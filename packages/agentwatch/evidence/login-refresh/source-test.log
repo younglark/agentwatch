@@ -1,0 +1,8 @@
+bun test v1.4.4 (38afee6c8)
+# bun test test/core.test.ts test/cli.test.ts test/auth.test.ts
+# Re-run after desktop peek/API-base and outbox-restart fixes; exit 0.
+
+ 107 pass
+ 0 fail
+ 762 expect() calls
+Ran 107 tests across 3 files. [89.79s]

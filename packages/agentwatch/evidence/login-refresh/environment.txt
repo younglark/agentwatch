@@ -1,0 +1,11 @@
+date: 2026-11-20 22:02:54 CST (Asia/Shanghai)
+host: Linux 6.12.113+ x86_64
+bun: 1.4.4
+head: b52ba5e838930931e9ad93e96665cb80d99281cc
+branch: feat/bun-task-core ahead 4
+typecheck: pass (bun run typecheck, tsc6 --noEmit)
+source tests: 107 pass / 0 fail, 762 expect, 89.79s (test/core.test.ts test/cli.test.ts test/auth.test.ts)
+compiled tests: 74 pass / 0 fail, 578 expect, 41.27s after bun run build && bun run build:test-host
+dist/agentwatch: 110000304 bytes sha256=cd32226b15560a171b503c7ed6bca9050a7eda5690ed97384697226863725227
+dist/test-host: 109684912 bytes sha256=03ec667e082518193a9560decc6fd82ad2dfb4afdf9331242596f3e573dba7d5
+live: not attempted; mock HTTP + temp HOME + fixtures only

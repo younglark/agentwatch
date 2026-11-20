@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "bun node_modules/typescript/bin/tsc6 --noEmit",
-    "test": "bun test test/core.test.ts test/cli.test.ts",
+    "test": "bun test test/core.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts",
     "build": "bun build --compile --define AGENTWATCH_COMPILED=true src/main.ts --outfile dist/agentwatch",
     "verify": "bun run typecheck && bun run test && bun run build && bun run build:test-host && bun test test/compiled.test.ts",
     "build:test-host": "bun build --compile --define TEST_HOST_COMPILED=true test/host.ts --outfile dist/test-host"

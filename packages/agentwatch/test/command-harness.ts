@@ -2,6 +2,7 @@ import { mkdtempSync,mkdirSync,existsSync,appendFileSync,readFileSync,rmSync,wri
 import { tmpdir } from 'node:os';
 import { join,dirname } from 'node:path';
 import { readRegistration,request,type Registration } from '../src/service.ts';
+import { encryptOscryptV10,LINUX_BASIC_PASSWORD,LINUX_PBKDF2_ITERATIONS } from '../src/auth/oscrypt.ts';
 export const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 export function alive(pid:number) {try{return !readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1]!.startsWith('Z');}catch{return false;}}
 export async function until<A>(fn:()=>Promise<A>,predicate:(a:A)=>boolean,timeout=8000):Promise<A> {
@@ -10,21 +11,27 @@ export async function until<A>(fn:()=>Promise<A>,predicate:(a:A)=>boolean,timeou
 export function commandHarness(cli:readonly string[],host:readonly string[],env:NodeJS.ProcessEnv=process.env) {
   const root=mkdtempSync(join(tmpdir(),'aw core-')),state=join(root,'状态 space'),cwd=join(root,'项目 空格');
   mkdirSync(state,{mode:0o700});mkdirSync(cwd,{mode:0o700});
-  const home=join(root,'home'),bin=join(root,'bin');mkdirSync(home);mkdirSync(bin);
-  env={...env,HOME:home,PATH:bin};
+  const home=join(root,'home'),bin=join(root,'bin'),xdg=join(home,'.config'),appdata=join(home,'AppData','Roaming');
+  mkdirSync(home);mkdirSync(bin);mkdirSync(xdg,{recursive:true});mkdirSync(appdata,{recursive:true});
+  env={...env,HOME:home,PATH:bin,XDG_CONFIG_HOME:xdg,APPDATA:appdata};
+  delete env.AGENTWATCH_SECRETS_FILE;delete env.AGENTWATCH_USER_DATA;delete env.AGENTWATCH_API_BASE;delete env.AGENTWATCH_WEBSITE;delete env.AGENTWATCH_AUTH_MODE;delete env.AGENTWATCH_OAUTH_CLIENT_ID;
   const owned=new Set<number>();
   function receipts():Array<{request_id:string;pid:number}> {
     const file=join(cwd,'fixture-spawns.jsonl');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
   }
   const authDir=join(home,'.agentwatch','auth'),credentials=join(authDir,'credentials.json');
-  env.AGENTWATCH_CREDENTIALS=credentials;delete env.AGENTWATCH_CLIENT_ID;
+  delete env.AGENTWATCH_CREDENTIALS;delete env.AGENTWATCH_CLIENT_ID;
   type Reply={body?:unknown;status?:number;hang?:boolean;lost?:boolean;oversized?:boolean;headers?:Record<string,string>};
   type Handler=(body:any,count:number)=>Reply;
   let lookup:Handler=()=>({body:{agents:[{agentId:'test-bot'}]}}),send:Handler=()=>({body:{dispatched:true,delivery:'GROK_BOT_USER_MESSAGE_DELIVERY_ACCEPTED_TEMPORAL',workflowId:'workflow-fixture'}}),status:Handler=()=>({body:{status:'GROK_BOT_SEND_STATUS_NOT_FOUND'}});
   const calls:{method:string;body:any;authorization:string|null;headers:Record<string,string>}[]=[],active=new Set<number>();let sequence=0;
+  const oauthCalls:{url:string;body:any}[]=[],pollCalls:string[]=[];
   const backend=Bun.serve({hostname:'127.0.0.1',port:0,idleTimeout:0,async fetch(req){
-    const method=new URL(req.url).pathname.split('/').pop()!,body=await req.json();calls.push({method,body,authorization:req.headers.get('authorization'),headers:Object.fromEntries(req.headers)});
-    if(req.method!=='POST'||new URL(req.url).pathname!==`/aiserver.v1.GrokBotService/${method}`||req.headers.get('content-type')!=='application/json'||req.headers.get('connect-protocol-version')!=='1')return Response.json({code:'invalid_argument'},{status:400});
+    const url=new URL(req.url);
+    if(url.pathname==='/oauth/token'){const body=await req.json();oauthCalls.push({url:url.toString(),body});return Response.json({error:'unexpected_desktop_refresh'},{status:400});}
+    if(url.pathname==='/auth/poll'){pollCalls.push(url.toString());return new Response(null,{status:404});}
+    const method=url.pathname.split('/').pop()!,body=await req.json();calls.push({method,body,authorization:req.headers.get('authorization'),headers:Object.fromEntries(req.headers)});
+    if(req.method!=='POST'||url.pathname!==`/aiserver.v1.GrokBotService/${method}`||req.headers.get('content-type')!=='application/json'||req.headers.get('connect-protocol-version')!=='1')return Response.json({code:'invalid_argument'},{status:400});
     const count=calls.filter(c=>c.method===method).length;
     if(method==='ListGrokBotAgents')appendFileSync(join(root,'lookup-calls'),'query\n');
     if(method==='SendGrokBotUserMessage'){writeFileSync(join(root,'notification-body'),(body as any).text);appendFileSync(join(root,'notification-calls'),JSON.stringify({message_id:(body as any).messageId})+'\n');}
@@ -35,7 +42,25 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
     if(reply.oversized)return new Response('x'.repeat(1048577),{headers:{'content-type':'application/json'}});
     return typeof reply.body==='string'?new Response(reply.body,{status:reply.status??200,headers:{'content-type':'application/json'}}):Response.json(reply.body??{}, {status:reply.status??200,headers:reply.headers});
   }});
-  function configureAuth(overrides:Record<string,unknown>={}){mkdirSync(authDir,{recursive:true,mode:0o700});writeFileSync(credentials,JSON.stringify({version:1,backend:`http://127.0.0.1:${backend.port}`,client_id:'synthetic-client',access_token:'SYNTHETIC_PRIVATE_TOKEN',expires_at_ms:Date.now()+60000,...overrides}),{mode:0o600});}
+  const secretsFile=join(xdg,'Grok Bot','sand-secrets.json');
+  function desktopToken(overrides:Record<string,unknown>){
+    if(typeof overrides.access_token==='string')return overrides.access_token;
+    if(typeof overrides.expires_at_ms==='number'){
+      const header=Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url');
+      const payload=Buffer.from(JSON.stringify({exp:Math.floor(overrides.expires_at_ms/1000)||0})).toString('base64url');
+      return `${header}.${payload}.sig`;
+    }
+    return 'SYNTHETIC_PRIVATE_TOKEN';
+  }
+  function configureAuth(overrides:Record<string,unknown>={}){
+    mkdirSync(dirname(secretsFile),{recursive:true,mode:0o700});
+    const access=encryptOscryptV10(desktopToken(overrides),LINUX_BASIC_PASSWORD,LINUX_PBKDF2_ITERATIONS).toString('base64');
+    const refresh=encryptOscryptV10('SECRET_DESKTOP_REFRESH',LINUX_BASIC_PASSWORD,LINUX_PBKDF2_ITERATIONS).toString('base64');
+    writeFileSync(secretsFile,JSON.stringify({version:1,'cursor-accounts':{active:'acct-1',accounts:{'acct-1':{'cursor-access-token':access,'cursor-refresh-token':refresh}}}}),{mode:0o600});
+    env.AGENTWATCH_SECRETS_FILE=secretsFile;
+    env.AGENTWATCH_API_BASE=typeof overrides.backend==='string'?overrides.backend:`http://127.0.0.1:${backend.port}`;
+    mkdirSync(authDir,{recursive:true,mode:0o700});
+  }
   function mockConnect(options:{lookup?:Handler;send?:Handler;status?:Handler}={}){configureAuth();if(options.lookup)lookup=options.lookup;if(options.send)send=options.send;if(options.status)status=options.status;}
   function notificationCalls(){const file=join(root,'notification-calls');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)) as {message_id:string}[]:[];}
   const activeHttp=()=>active.size;
@@ -63,5 +88,5 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
     }
     backend.stop(true);rmSync(root,{recursive:true,force:true});
   }
-  return {root,state,cwd,home,bin,env,mockConnect,configureAuth,credentials,calls,notificationCalls,activeHttp,nativeFixture,call,startHost,receipts,cleanup};
+  return {root,state,cwd,home,bin,env,mockConnect,configureAuth,credentials:secretsFile,authDir,calls,oauthCalls,pollCalls,notificationCalls,activeHttp,nativeFixture,call,startHost,receipts,cleanup};
 }
