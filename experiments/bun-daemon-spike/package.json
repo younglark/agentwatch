@@ -1,0 +1,26 @@
+{
+  "name": "agentwatch-bun-daemon-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test test/source.test.ts",
+    "typecheck": "bun node_modules/typescript/bin/tsc6 --noEmit",
+    "build": "bun build --compile --define SPIKE_COMPILED=true ./src/main.ts --outfile ./dist/spike",
+    "verify": "bun run typecheck && bun test test/source.test.ts && bun run build && bun test test/compiled.test.ts"
+  },
+  "dependencies": {
+    "effect": "4.1.0",
+    "@effect/platform-bun": "4.1.0",
+    "@effect/sql-sqlite-bun": "4.1.0",
+    "drizzle-orm": "1.0.0-rc.5-169397b"
+  },
+  "devDependencies": {
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "@types/bun": "1.4.4"
+  },
+  "packageManager": "bun@1.4.4",
+  "overrides": {
+    "@effect/platform-node-shared": "4.1.0",
+    "@types/node": "24.12.2"
+  }
+}
