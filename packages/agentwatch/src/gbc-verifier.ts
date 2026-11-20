@@ -35,7 +35,12 @@ export const verifyGbc:Verifier=async input=>{
   catch{throw unavailable();}
   if(envelope.simulated)throw unavailable();
   if(envelope.outcome==='unknown')throw new CoreError('UNKNOWN','External bot lookup is inconclusive; no task was started');
-  if(result.code===4&&!envelope.ok&&['auth','unauthenticated'].includes(envelope.code))
+  // bot.get preserves structured auth codes; gbc emitResult maps these to exit 9.
+  const credentialFailure=result.code===9&&[
+    'auth_revoked','auth_refresh_unconfigured','auth_refresh_client_mismatch','auth_refresh_subject_mismatch',
+  ].includes(envelope.code);
+  if(!envelope.ok&&envelope.outcome==='known_failure'&&!envelope.retryable&&
+    ((result.code===4&&['auth','unauthenticated'].includes(envelope.code))||credentialFailure))
     throw new CoreError('AUTH_NOT_CONFIGURED','Log in with gbc independently before starting tasks');
   if(!envelope.ok&&envelope.outcome==='known_failure'&&
     ((result.code===5&&envelope.code==='not_found')||(result.code===7&&['denied','permission_denied'].includes(envelope.code))))

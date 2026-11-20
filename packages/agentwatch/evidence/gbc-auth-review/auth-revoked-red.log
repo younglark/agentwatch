@@ -1,0 +1,25 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+61 |   for(const code of ['auth_revoked'] as const)
+62 |     check(`production gbc ${code} exit9 is auth unavailable before admission and launch`,async h=>{
+63 |       const error={schema_version:'1.0.0',ok:false,outcome:'known_failure',code,retryable:false,request_id:'fixture',error:{message:'SECRET_REFRESH_TOKEN'}};
+64 |       h.mockGbc(9,error);
+65 |       const rejected=await h.call('run',['--bot','test-bot','--request-id',code,'--cwd',h.cwd,'--','claude']);
+66 |       expect(rejected.code,rejected.err).toBe(4);expect(rejected.out).toBe('');expect(JSON.parse(rejected.err).error.code).toBe('AUTH_NOT_CONFIGURED');
+                                              ^
+error: {"version":1,"error":{"code":"TRANSPORT_NOT_CONFIGURED","message":"External bot lookup failed; no task was started"}}
+
+
+Expected: 4
+Received: 8
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:66:42)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:14:52)
+(fail) source CLI: production gbc auth_revoked exit9 is auth unavailable before admission and launch [531.84ms]
+
+ 0 pass
+ 26 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [659.00ms]

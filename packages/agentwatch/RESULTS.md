@@ -1,4 +1,52 @@
-# t183 外部 gbc 身份门闩 — current
+# t183 独立审查 P2：结构化鉴权错误映射修复 — current
+
+2026-11-20，Asia/Shanghai。固定基线 `94dd83de453ae1eae7617110897ed9c0f13ec3e3`。
+本轮仅修独立 Spec 审查发现的 P2，不实现通知、不改变外部 gbc 边界。
+
+## 核验与修复
+
+重新只读核对 `npm-v0.7.0` 的 `dist/connect/client.js`、`dist/auth/provider.js`、
+`dist/errors.js`，并对照已读的 bot.fromErr / emitResult：四个结构化凭据错误会被
+保留在失败封套里，emitResult/mapExitCode 对其 known_failure + 非 retryable 结果
+返回 **9**，不能仅按 auth/unauthenticated 的 exit 4 识别。
+精确来源链记录在 `evidence/gbc-auth-review/upstream-contract.md`。
+
+修复新增精确白名单：auth_revoked、auth_refresh_unconfigured、
+auth_refresh_client_mismatch、auth_refresh_subject_mismatch，仅当 gbc exit 9、
+非模拟、ok:false、known_failure、retryable:false 时映射为 AUTH_NOT_CONFIGURED / 4。
+保留 unknown 与 simulated 优先拒绝，不泛化全部 exit 9 或任意 auth 前缀。
+无新增凭据读取、登录、协议/RPC、后端访问或通知代码。
+
+## TDD 与公共契约验收
+
+四个码逐个加入同一公共 CLI contract，分别先观察 **8 而非预期 4** 的 red，
+仅加入对应码后 green。每个 green 12 assertions：入账前返回4且该 request_id 零行；
+入账后、启动前失败保留任务并记 AUTH_NOT_CONFIGURED，pid 为 null，native fixture
+未启动；合成秘密不进入 stdout/stderr 或私有诊断日志。该契约由源码与编译测试共用。
+每码的 red/green 日志均保留在 `evidence/gbc-auth-review/`。
+
+另补三项负向回归：unsupported + exit9、未知 auth 前缀 + exit9、retryable 的
+refresh network 错误，均维持 TRANSPORT_NOT_CONFIGURED / 8、零入账，不误判为 auth。
+
+最终正式包 `bun run verify` **exit 0**（含型别检查、源码测试、重建两个二进制、编译契约）：
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| 正式源码 | 51 / 0 | 326 | 27.21s |
+| 正式编译 | 31 / 0 | 242 | 12.66s |
+
+完整日志 `evidence/gbc-auth-review/verify.log`。生产产物 109,947,056 bytes。
+编译验收继续隔离 HOME/cwd、仅 mock 目录的 PATH、暂移源码；没有真实凭据或后端。
+未修改 spike，本轮未重跑 spike（上一阶段结果仅保留为历史）。
+
+health 字段不变：gbc 可定位为 gbc，否则 not_configured；test_only 仅 testhost；
+notification_transport 仍 not_configured。仍不声称 live OAuth 刷新、真实 bot/团队绑定、
+四家 E2E 或通知完成。进程审计见同目录 cleanup-audit.json。
+单独本地提交，不 amend、不 push、不发布；修复后等待父代理复审。
+
+---
+
+# t183 外部 gbc 身份门闩 — historical
 
 2026-11-20，Asia/Shanghai。固定基线：`b41b4d50b8582744e595a8d3b740dbe9f41a4867`。
 仅实现生产身份门闩；通知 transport 虽已解禁，但本轮未实现。下面旧阶段的

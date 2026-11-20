@@ -58,6 +58,25 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,'gbc-auth')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
     expect(readFileSync(join(h.root,'gbc-calls'),'utf8')).toContain('query');
   });
+  for(const code of ['auth_revoked','auth_refresh_unconfigured','auth_refresh_client_mismatch','auth_refresh_subject_mismatch'] as const)
+    check(`production gbc ${code} exit9 is auth unavailable before admission and launch`,async h=>{
+      const error={schema_version:'1.0.0',ok:false,outcome:'known_failure',code,retryable:false,request_id:'fixture',error:{message:'SECRET_REFRESH_TOKEN'}};
+      h.mockGbc(9,error);
+      const rejected=await h.call('run',['--bot','test-bot','--request-id',code,'--cwd',h.cwd,'--','claude']);
+      expect(rejected.code,rejected.err).toBe(4);expect(rejected.out).toBe('');expect(JSON.parse(rejected.err).error.code).toBe('AUTH_NOT_CONFIGURED');
+      expect(ledgerRows(h.state,code)).toHaveLength(0);expect(rejected.err).not.toContain('SECRET_REFRESH_TOKEN');
+      h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},`if [ -f "$HOME/review-checked" ]; then
+printf '%s\\n' '${JSON.stringify(error)}' >&2
+exit 9
+fi
+: > "$HOME/review-checked"`);
+      const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf yes > auth-launched\n',{mode:0o700});
+      const run=await h.call('run',['--bot','test-bot','--request-id',code+'-launch','--cwd',h.cwd,'--',fixture]);
+      expect(run.code,run.err).toBe(0);expect(ledgerRows(h.state,code+'-launch')).toHaveLength(1);
+      const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);
+      expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(existsSync(join(h.cwd,'auth-launched'))).toBe(false);
+      expect(run.out+run.err+done.out+done.err+readFileSync(join(h.state,'diagnostics.log'),'utf8')).not.toContain('SECRET_REFRESH_TOKEN');
+    });
   check('production gbc not_found denies admission and reports adapter availability',async h=>{
     h.mockGbc(5,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'not_found',retryable:false,request_id:'fixture'});
     const run=await h.call('run',['--bot','test-bot','--request-id','gbc-missing','--cwd',h.cwd,'--','claude']);
@@ -107,6 +126,9 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     ['non-json',0,'SECRET_GBC_TOKEN',''],
     ['schema-mismatch',0,{schema_version:'2.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
     ['missing-agent-id',0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{name:'test-bot'}}},''],
+    ['non-auth-exit9',9,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unsupported',retryable:false,request_id:'fixture'},''],
+    ['unknown-auth-code',9,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_future_code',retryable:false,request_id:'fixture'},''],
+    ['retryable-auth-refresh',8,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_refresh_network',retryable:true,request_id:'fixture'},''],
     ['inconsistent-exit',4,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
     ['timeout',0,'SECRET_GBC_TOKEN','while :; do :; done'],
     ['oversized',0,'SECRET_GBC_TOKEN',`while :; do printf '%s' '${'x'.repeat(4096)}'; done`],

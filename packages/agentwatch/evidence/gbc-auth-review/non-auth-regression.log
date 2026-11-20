@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: production gbc non-auth-exit9 fails closed with bounded private diagnostics [578.33ms]
+(pass) source CLI: production gbc unknown-auth-code fails closed with bounded private diagnostics [535.62ms]
+(pass) source CLI: production gbc retryable-auth-refresh fails closed with bounded private diagnostics [529.63ms]
+
+ 3 pass
+ 30 filtered out
+ 0 fail
+ 18 expect() calls
+Ran 3 tests across 1 file. [1.76s]

@@ -1,0 +1,112 @@
+$ bun run typecheck && bun run test && bun run build && bun run build:test-host && bun test test/compiled.test.ts
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+$ bun test test/core.test.ts test/cli.test.ts
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [32.71ms]
+(pass) core executes fixture once, preserves argv, and wait timeout never cancels [194.20ms]
+(pass) cancel at deterministic beforeClaim barrier prevents any process launch [11.75ms]
+(pass) cancel at deterministic beforeLaunch barrier prevents any process launch [10.13ms]
+(pass) recover lost supervision as unknown without replay; drain ignores historical unknown [9.66ms]
+(pass) authorization is checked again before launch; revocation never starts a child [26.31ms]
+(pass) log reads enforce byte offsets/default and maximum bounds [181.24ms]
+(pass) outbox insertion failure rolls back terminal state [9.60ms]
+(pass) future migration versions fail closed rather than rewriting schema [6.55ms]
+(pass) spawn ENOENT is failed with no PID, not an ambiguous running task [26.95ms]
+ADMISSION_DRAIN_NO_LATE_LAUNCH
+(pass) drain settles admitted submit commit and leaves no queued task to launch after restart [191.08ms]
+(pass) log buffer allocation failure does not leave an opened descriptor [8.00ms]
+(pass) logs reject symlink/nonregular files and traversal IDs from a tampered ledger [8.62ms]
+(pass) spawn log writers reject stdout and stderr symlinks without touching owned sentinel [0.63ms]
+(pass) log directory replacement at open cannot redirect a pinned log read [9.72ms]
+(pass) drain rejects a verifier-pending submission before admission without a ledger row [5.56ms]
+(pass) inode validation maps IPC_AUTH, does not leak, and swallows a later closeSync throw [9.50ms]
+(pass) directory-swap cleanup still disposes engine, store and temp dir if path restore throws [8.14ms]
+
+test/cli.test.ts:
+(pass) authenticated loopback protocol isolates states and runs a fixture through the real ledger [201.61ms]
+(pass) source CLI: five JSON commands preserve native argv and timeout never cancels [1864.85ms]
+(pass) source CLI: concurrent same ID returns one fixture process; changed argv conflicts [815.29ms]
+(pass) source CLI: unconfigured production verifier is visible and cannot be bypassed [903.01ms]
+(pass) source CLI: production gbc auth failure is closed and never leaks child diagnostics [506.12ms]
+(pass) source CLI: production gbc auth_revoked exit9 is auth unavailable before admission and launch [893.97ms]
+(pass) source CLI: production gbc auth_refresh_unconfigured exit9 is auth unavailable before admission and launch [907.60ms]
+(pass) source CLI: production gbc auth_refresh_client_mismatch exit9 is auth unavailable before admission and launch [906.85ms]
+(pass) source CLI: production gbc auth_refresh_subject_mismatch exit9 is auth unavailable before admission and launch [991.02ms]
+(pass) source CLI: production gbc not_found denies admission and reports adapter availability [530.60ms]
+(pass) source CLI: production gbc exact agent_id admits a fixture and rechecks before launch [994.62ms]
+(pass) source CLI: production gbc unknown outcome preserves uncertainty without inserting a task [563.13ms]
+(pass) source CLI: production gbc permission_denied maps to bot authorization failure [523.65ms]
+(pass) source CLI: production gbc rejects server-id and name aliases even with forged fake fields [635.55ms]
+(pass) source CLI: production gbc rejects simulated envelopes despite inherited mock env [579.76ms]
+(pass) source CLI: production gbc non-json fails closed with bounded private diagnostics [589.47ms]
+(pass) source CLI: production gbc schema-mismatch fails closed with bounded private diagnostics [563.87ms]
+(pass) source CLI: production gbc missing-agent-id fails closed with bounded private diagnostics [550.88ms]
+(pass) source CLI: production gbc non-auth-exit9 fails closed with bounded private diagnostics [520.97ms]
+(pass) source CLI: production gbc unknown-auth-code fails closed with bounded private diagnostics [515.23ms]
+(pass) source CLI: production gbc retryable-auth-refresh fails closed with bounded private diagnostics [510.98ms]
+(pass) source CLI: production gbc inconsistent-exit fails closed with bounded private diagnostics [514.44ms]
+(pass) source CLI: production gbc timeout fails closed with bounded private diagnostics [3603.72ms]
+(pass) source CLI: production gbc oversized fails closed with bounded private diagnostics [500.87ms]
+(pass) source CLI: production ignores a non-executable gbc and help never consults credentials [712.11ms]
+(pass) source CLI: production gbc credential loss after admission prevents native launch [797.25ms]
+(pass) source CLI: bot denial, program allowlist and malformed requests fail without stdout or spawn [968.26ms]
+(pass) source CLI: IPC log reads reject replaced links, nonregular files and ledger traversal [1459.84ms]
+(pass) source CLI: private registration rejects wrong credentials/scope and unsafe permissions [194.31ms]
+(pass) source CLI: crash releases ownership, recovers unknown without replay and does not block drain [1186.00ms]
+FORMAL_SHUTDOWN_EXIT_OBSERVED_BEFORE_CLEANUP
+(pass) source CLI: authenticated shutdown drains its fixture and exits before cleanup rescue [530.92ms]
+(pass) source CLI: concurrent production CLI ensure elects one compatible daemon [807.18ms]
+(pass) local protocol accepts only own domain error codes and rejects prototype names [6.54ms]
+
+ 51 pass
+ 0 fail
+ 326 expect() calls
+Ran 51 tests across 2 files. [27.21s]
+$ bun build --compile --define AGENTWATCH_COMPILED=true src/main.ts --outfile dist/agentwatch
+  [39ms]  bundle  401 modules
+ [367ms] compile  dist/agentwatch
+$ bun build --compile --define TEST_HOST_COMPILED=true test/host.ts --outfile dist/test-host
+  [44ms]  bundle  351 modules
+ [399ms] compile  dist/test-host
+bun test v1.4.4 (38afee6c8)
+
+test/compiled.test.ts:
+(pass) compiled CLI isolated-PATH: five JSON commands preserve native argv and timeout never cancels [676.52ms]
+(pass) compiled CLI isolated-PATH: concurrent same ID returns one fixture process; changed argv conflicts [458.34ms]
+(pass) compiled CLI isolated-PATH: unconfigured production verifier is visible and cannot be bypassed [360.93ms]
+(pass) compiled CLI isolated-PATH: production gbc auth failure is closed and never leaks child diagnostics [223.45ms]
+(pass) compiled CLI isolated-PATH: production gbc auth_revoked exit9 is auth unavailable before admission and launch [336.07ms]
+(pass) compiled CLI isolated-PATH: production gbc auth_refresh_unconfigured exit9 is auth unavailable before admission and launch [353.49ms]
+(pass) compiled CLI isolated-PATH: production gbc auth_refresh_client_mismatch exit9 is auth unavailable before admission and launch [329.80ms]
+(pass) compiled CLI isolated-PATH: production gbc auth_refresh_subject_mismatch exit9 is auth unavailable before admission and launch [408.89ms]
+(pass) compiled CLI isolated-PATH: production gbc not_found denies admission and reports adapter availability [193.59ms]
+(pass) compiled CLI isolated-PATH: production gbc exact agent_id admits a fixture and rechecks before launch [376.24ms]
+(pass) compiled CLI isolated-PATH: production gbc unknown outcome preserves uncertainty without inserting a task [216.07ms]
+(pass) compiled CLI isolated-PATH: production gbc permission_denied maps to bot authorization failure [217.12ms]
+(pass) compiled CLI isolated-PATH: production gbc rejects server-id and name aliases even with forged fake fields [220.95ms]
+(pass) compiled CLI isolated-PATH: production gbc rejects simulated envelopes despite inherited mock env [197.76ms]
+(pass) compiled CLI isolated-PATH: production gbc non-json fails closed with bounded private diagnostics [225.87ms]
+(pass) compiled CLI isolated-PATH: production gbc schema-mismatch fails closed with bounded private diagnostics [226.71ms]
+(pass) compiled CLI isolated-PATH: production gbc missing-agent-id fails closed with bounded private diagnostics [221.78ms]
+(pass) compiled CLI isolated-PATH: production gbc non-auth-exit9 fails closed with bounded private diagnostics [214.85ms]
+(pass) compiled CLI isolated-PATH: production gbc unknown-auth-code fails closed with bounded private diagnostics [220.05ms]
+(pass) compiled CLI isolated-PATH: production gbc retryable-auth-refresh fails closed with bounded private diagnostics [222.46ms]
+(pass) compiled CLI isolated-PATH: production gbc inconsistent-exit fails closed with bounded private diagnostics [242.18ms]
+(pass) compiled CLI isolated-PATH: production gbc timeout fails closed with bounded private diagnostics [3201.83ms]
+(pass) compiled CLI isolated-PATH: production gbc oversized fails closed with bounded private diagnostics [230.95ms]
+(pass) compiled CLI isolated-PATH: production ignores a non-executable gbc and help never consults credentials [279.38ms]
+(pass) compiled CLI isolated-PATH: production gbc credential loss after admission prevents native launch [264.76ms]
+(pass) compiled CLI isolated-PATH: bot denial, program allowlist and malformed requests fail without stdout or spawn [313.11ms]
+(pass) compiled CLI isolated-PATH: IPC log reads reject replaced links, nonregular files and ledger traversal [630.29ms]
+(pass) compiled CLI isolated-PATH: private registration rejects wrong credentials/scope and unsafe permissions [108.30ms]
+(pass) compiled CLI isolated-PATH: crash releases ownership, recovers unknown without replay and does not block drain [515.46ms]
+FORMAL_SHUTDOWN_EXIT_OBSERVED_BEFORE_CLEANUP
+(pass) compiled CLI isolated-PATH: authenticated shutdown drains its fixture and exits before cleanup rescue [367.09ms]
+(pass) compiled CLI isolated-PATH: concurrent production CLI ensure elects one compatible daemon [313.48ms]
+
+ 31 pass
+ 0 fail
+ 242 expect() calls
+Ran 31 tests across 1 file. [12.66s]

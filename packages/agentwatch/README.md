@@ -71,7 +71,12 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
    `data.bot.agent_id`。拒绝 `simulated:true`，子进程环境移除 `GBT_MOCK*` 和
    `GBT_ALLOW_WRITES`；生产 IPC 中伪造 `testOnly` / `verifier:fake` 也无效。
    PATH 上的 gbc 是操作者信任的外部程序，本门闩不是对恶意同 UID 程序的认证或沙箱。
-4. 缺失/不可执行、gbc auth/unauthenticated → exit 4；not_found、denied/
+4. 缺失/不可执行、gbc auth/unauthenticated → exit 4；另对 exit 9 的合法
+   `known_failure`、非 retryable 封套，精确识别 `auth_revoked`、
+   `auth_refresh_unconfigured`、`auth_refresh_client_mismatch`、
+   `auth_refresh_subject_mismatch` 为 `AUTH_NOT_CONFIGURED` / 4。
+   这是 gbc 保留结构化凭据错误后经 emitResult/mapExitCode 得到的退出码；
+   不把其它 exit 9 或任意 auth 前缀码当鉴权错误。not_found、denied/
    permission_denied、返回别的 agent_id → `BOT_FORBIDDEN` / 5；unknown outcome
    （包括列表截断）→ `UNKNOWN` / 10；非 JSON、封套不匹配、其它查询失败、3 秒超时、
    任一流超出 1 MiB → `TRANSPORT_NOT_CONFIGURED` / 8。所有入账前失败均零任务行。
@@ -84,7 +89,8 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
    `test_only`。`notification_transport` 仍是 `not_configured`。
 
 契约依据：[npm-v0.7.0 README](https://github.com/younglark/grokbot-control/blob/npm-v0.7.0/README.md)、
-`dist/cli/{main,io,config}.js`、`dist/{errors,dto/result,ops/bot}.js`。
+`dist/cli/{main,io,config}.js`、`dist/{errors,dto/result,ops/bot}.js`、
+`dist/connect/client.js`、`dist/auth/provider.js`。
 这是用户选定的非官方逆向控制面，**不是官方公开 API**。本轮没有 live 登录、
 OAuth 刷新、真实 bot / 团队绑定或四家 CLI E2E 验证；不因 mock 测试通过而声称已验证。
 通知 transport 已获准在后续实现，但本轮未做。二进制只含 agentwatch 本体与现有依赖，

@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: production gbc auth_refresh_client_mismatch exit9 is auth unavailable before admission and launch [978.09ms]
+
+ 1 pass
+ 28 filtered out
+ 0 fail
+ 12 expect() calls
+Ran 1 test across 1 file. [1099.00ms]
