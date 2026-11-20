@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { test,expect } from 'bun:test';
-import { readFileSync,writeFileSync,statSync,chmodSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
+import { readFileSync,writeFileSync,statSync,existsSync,chmodSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { commandHarness,until,alive } from './command-harness.ts';
 import { readRegistration,request } from '../src/service.ts';
@@ -14,7 +14,7 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const h=commandHarness(cli,host,env);try{await body(h);}finally{await h.cleanup();}
   },20000);
   check('five JSON commands preserve native argv and timeout never cancels',async h=>{
-    await h.startHost();
+    const info=(await h.startHost())!;expect((await request(info,'health',{})).bot_verifier).toBe('test_only');
     const argv=['claude','-p','hello 空格','', '--resume','session-id','--json','long'];
     const run=await h.call('run',['--json','--bot','test-bot','--request-id','five','--cwd',h.cwd,'--',...argv]);
     expect(run.code,run.err).toBe(0);expect(run.err).toBe('');const id=run.value.data.id;
@@ -50,6 +50,92 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     expect(bypass.code).toBe(2);expect(bypass.out).toBe('');expect(ledgerRows(h.state,'bypass')).toHaveLength(0);
     const wizard=await h.call('run',['--wizard']);expect(wizard.code).toBe(2);expect(wizard.out).toBe('');expect(JSON.parse(wizard.err).error.code).toBe('USAGE');
     expect(run.err).not.toContain(info.token);
+  });
+  check('production gbc auth failure is closed and never leaks child diagnostics',async h=>{
+    h.mockGbc(4,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unauthenticated',retryable:false,request_id:'fixture',error:{message:'SECRET_GBC_TOKEN'}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-auth','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('AUTH_NOT_CONFIGURED');
+    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,'gbc-auth')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
+    expect(readFileSync(join(h.root,'gbc-calls'),'utf8')).toContain('query');
+  });
+  check('production gbc not_found denies admission and reports adapter availability',async h=>{
+    h.mockGbc(5,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'not_found',retryable:false,request_id:'fixture'});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-missing','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('BOT_FORBIDDEN');
+    expect(ledgerRows(h.state,'gbc-missing')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
+    const health=await request(readRegistration(h.state)!,'health',{});
+    expect(health.bot_verifier).toBe('gbc');expect(health.notification_transport).toBe('not_configured');
+  });
+  check('production gbc exact agent_id admits a fixture and rechecks before launch',async h=>{
+    h.env.GBT_MOCK='1';
+    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot',id:'42',name:'not a selector'}}},'[ "${GBT_MOCK+x}" != x ] || exit 2');
+    const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf "fixture only\\n"\n',{mode:0o700});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-allowed','--cwd',h.cwd,'--',fixture]);
+    expect(run.code,run.err).toBe(0);expect(run.err).toBe('');expect(ledgerRows(h.state,'gbc-allowed')).toHaveLength(1);
+    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);
+    expect(done.code,done.err).toBe(0);expect(done.value.data.task.state).toBe('succeeded');
+    expect((await h.call('logs',[run.value.data.id])).value.data.text).toBe('fixture only\n');
+    expect(readFileSync(join(h.root,'gbc-calls'),'utf8').trim().split('\n')).toHaveLength(2);
+    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('gbc');
+  });
+  check('production gbc unknown outcome preserves uncertainty without inserting a task',async h=>{
+    h.mockGbc(10,{schema_version:'1.0.0',ok:false,outcome:'unknown',code:'lookup_incomplete',retryable:false,request_id:'fixture',error:{message:'SECRET_GBC_TOKEN'}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-unknown','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(10);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('UNKNOWN');
+    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,'gbc-unknown')).toHaveLength(0);
+  });
+  check('production gbc permission_denied maps to bot authorization failure',async h=>{
+    h.mockGbc(7,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'permission_denied',retryable:false,request_id:'fixture'});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-denied','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('BOT_FORBIDDEN');
+    expect(ledgerRows(h.state,'gbc-denied')).toHaveLength(0);
+  });
+  check('production gbc rejects server-id and name aliases even with forged fake fields',async h=>{
+    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'other-agent',id:'test-bot',name:'test-bot'}}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-alias','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(ledgerRows(h.state,'gbc-alias')).toHaveLength(0);
+    await expect(request(readRegistration(h.state)!,'run',{request_id:'gbc-forged',bot:'test-bot',cwd:h.cwd,argv:['claude'],testOnly:true,verifier:'fake'})).rejects.toMatchObject({code:'BOT_FORBIDDEN'});
+    expect(ledgerRows(h.state,'gbc-forged')).toHaveLength(0);
+  });
+  check('production gbc rejects simulated envelopes despite inherited mock env',async h=>{
+    h.env.GBT_MOCK='1';
+    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',simulated:true,data:{bot:{agent_id:'test-bot'}}},'[ "${GBT_MOCK+x}" != x ] || exit 2');
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-simulated','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(8);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('TRANSPORT_NOT_CONFIGURED');expect(ledgerRows(h.state,'gbc-simulated')).toHaveLength(0);
+  });
+  for(const [name,code,envelope,extra] of [
+    ['non-json',0,'SECRET_GBC_TOKEN',''],
+    ['schema-mismatch',0,{schema_version:'2.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
+    ['missing-agent-id',0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{name:'test-bot'}}},''],
+    ['inconsistent-exit',4,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
+    ['timeout',0,'SECRET_GBC_TOKEN','while :; do :; done'],
+    ['oversized',0,'SECRET_GBC_TOKEN',`while :; do printf '%s' '${'x'.repeat(4096)}'; done`],
+  ] as const)check(`production gbc ${name} fails closed with bounded private diagnostics`,async h=>{
+    h.mockGbc(code,envelope,extra);
+    const started=Date.now(),requestId='gbc-'+name;
+    const run=await h.call('run',['--bot','test-bot','--request-id',requestId,'--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(8);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('TRANSPORT_NOT_CONFIGURED');
+    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,requestId)).toHaveLength(0);expect(Date.now()-started).toBeLessThan(8000);
+  });
+  check('production ignores a non-executable gbc and help never consults credentials',async h=>{
+    const file=join(h.bin,'gbc');writeFileSync(file,'SECRET_GBC_TOKEN',{mode:0o600});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-nonexec','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(ledgerRows(h.state,'gbc-nonexec')).toHaveLength(0);
+    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('not_configured');
+    mkdirSync(join(h.home,'.gbc'));writeFileSync(join(h.home,'.gbc','credentials.json'),'SECRET_GBC_TOKEN',{mode:0o600});
+    const help=await h.call('run',['--help']);expect(help.code,help.err).toBe(0);expect(help.out).toContain('--bot');expect(help.out+help.err+run.err).not.toContain('SECRET_GBC_TOKEN');
+  });
+  check('production gbc credential loss after admission prevents native launch',async h=>{
+    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},`if [ -f "$HOME/checked" ]; then
+printf '%s\\n' '{"schema_version":"1.0.0","ok":false,"outcome":"known_failure","code":"auth","retryable":false,"request_id":"fixture"}' >&2
+exit 4
+fi
+: > "$HOME/checked"`);
+    const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf yes > launched\n',{mode:0o700});
+    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-expired','--cwd',h.cwd,'--',fixture]);
+    expect(run.code,run.err).toBe(0);expect(ledgerRows(h.state,'gbc-expired')).toHaveLength(1);
+    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);
+    expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(existsSync(join(h.cwd,'launched'))).toBe(false);
   });
   check('bot denial, program allowlist and malformed requests fail without stdout or spawn',async h=>{
     await h.startHost();

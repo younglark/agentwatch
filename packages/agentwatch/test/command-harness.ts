@@ -1,4 +1,4 @@
-import { mkdtempSync,mkdirSync,existsSync,readFileSync,rmSync } from 'node:fs';
+import { mkdtempSync,mkdirSync,existsSync,readFileSync,rmSync,writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join,dirname } from 'node:path';
 import { readRegistration,request,type Registration } from '../src/service.ts';
@@ -10,9 +10,24 @@ export async function until<A>(fn:()=>Promise<A>,predicate:(a:A)=>boolean,timeou
 export function commandHarness(cli:readonly string[],host:readonly string[],env:NodeJS.ProcessEnv=process.env) {
   const root=mkdtempSync(join(tmpdir(),'aw core-')),state=join(root,'状态 space'),cwd=join(root,'项目 空格');
   mkdirSync(state,{mode:0o700});mkdirSync(cwd,{mode:0o700});
+  const home=join(root,'home'),bin=join(root,'bin');mkdirSync(home);mkdirSync(bin);
+  env={...env,HOME:home,PATH:bin};
   const owned=new Set<number>();
   function receipts():Array<{request_id:string;pid:number}> {
     const file=join(cwd,'fixture-spawns.jsonl');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
+  }
+  // POSIX stand-ins use only shell builtins; compiled tests expose no toolchain on PATH.
+  const quote=(s:string)=>"'"+s.replaceAll("'", "'\\''")+"'";
+  function mockGbc(code:number,envelope:unknown,extra='') {
+    const json=typeof envelope==='string'?envelope:JSON.stringify(envelope);
+    writeFileSync(join(bin,'gbc'),`#!/bin/sh
+[ "$#" -eq 4 ] && [ "$1" = --json ] && [ "$2" = bot ] && [ "$3" = get ] && [ "$4" = --agent-id=test-bot ] || exit 2
+[ -d "$HOME" ] && [ "$PATH" = ${quote(bin)} ] || exit 2
+printf '%s\\n' query >> ${quote(join(root,'gbc-calls'))}
+${extra}
+printf '%s\\n' ${quote(json)} ${code===0?'':'>&2'}
+exit ${code}
+`,{mode:0o700});
   }
   async function startHost() {
     const p=Bun.spawn([...host,state],{env,cwd:host.length===1?dirname(host[0]!):undefined,stdout:'ignore',stderr:'ignore'});owned.add(p.pid);
@@ -23,7 +38,7 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
   async function call(action:string,args:string[]=[]) {
     const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
-    let value:any;if(out)try{value=JSON.parse(out);}catch{throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
+    let value:any;if(out)try{value=JSON.parse(out);}catch{if(!args.includes('--help'))throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
     return {out,err,code,value};
   }
   async function cleanup() {
@@ -37,5 +52,5 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
     }
     rmSync(root,{recursive:true,force:true});
   }
-  return {root,state,cwd,call,startHost,receipts,cleanup};
+  return {root,state,cwd,home,bin,env,mockGbc,call,startHost,receipts,cleanup};
 }

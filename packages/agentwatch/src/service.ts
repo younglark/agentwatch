@@ -1,3 +1,4 @@
+import { verifyGbc,gbcPath } from './gbc-verifier.ts';
 import { Schema } from 'effect';
 import { Database } from 'bun:sqlite';
 import { mkdirSync,realpathSync,lstatSync,writeFileSync,renameSync,readFileSync,unlinkSync,openSync,closeSync,constants,appendFileSync } from 'node:fs';
@@ -58,7 +59,7 @@ function ownsLease(state:string) {
 }
 export interface Adapters {verify:Verifier;execute:Executor;testOnly?:boolean}
 export const productionAdapters:Adapters={
-  verify:async()=>{throw new CoreError('AUTH_NOT_CONFIGURED','Bot identity verifier is not configured; no task was started');},
+  verify:verifyGbc,
   execute:nativeExecutor,
 };
 export async function startDaemon(path:string,adapters:Adapters=productionAdapters) {
@@ -94,7 +95,7 @@ export async function startDaemon(path:string,adapters:Adapters=productionAdapte
         let message:typeof Message.Type;
         try{message=Schema.decodeUnknownSync(Message)(await req.json());}catch{throw new CoreError('USAGE','Invalid local request');}
         const data=message.data as Record<string,unknown>,op=message.operation;
-        if(op==='health')return result({pid:process.pid,instance,scope,protocol:PROTOCOL,version:VERSION,bot_verifier:adapters.testOnly?'test_only':'not_configured',notification_transport:'not_configured'});
+        if(op==='health')return result({pid:process.pid,instance,scope,protocol:PROTOCOL,version:VERSION,bot_verifier:adapters.testOnly?'test_only':gbcPath()?'gbc':'not_configured',notification_transport:'not_configured'});
         if(op==='run')return result(await engine!.run(data));
         if(op==='drain')return result(await engine!.drain());
         if(op==='shutdown'){setTimeout(()=>{void close();},30);return result({stopping:true,pid:process.pid});}

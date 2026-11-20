@@ -1,4 +1,63 @@
-# t179 cleanup results — current
+# t183 外部 gbc 身份门闩 — current
+
+2026-11-20，Asia/Shanghai。固定基线：`b41b4d50b8582744e595a8d3b740dbe9f41a4867`。
+仅实现生产身份门闩；通知 transport 虽已解禁，但本轮未实现。下面旧阶段的
+「verifier 未接通 / 通知搁置」是历史记录，当前边界以本节与 README 为准。
+
+## 实现与契约来源
+
+只读核对 `younglark/grokbot-control` 的 `npm-v0.7.0` tag README、
+`dist/cli/{main,io,config}.js`、`dist/{errors,dto/result,ops/bot}.js`。
+外部 argv 固定为 `gbc --json bot get --agent-id=BOT`；gbc get 是
+ListGrokBotAgents + 筛选，并支持 server id，因此本体另做精确 agent_id 复核。
+无依赖新增，不打包 gbc、协议或 App；不另造登录/List/Connect RPC。
+
+- PATH 缺失/不可执行、auth → 4 / AUTH_NOT_CONFIGURED；not_found、权限拒绝、
+  agent_id 不匹配 → 5 / BOT_FORBIDDEN；unknown outcome → 10 / UNKNOWN。
+- 超时（3 秒）、非 JSON、异常封套、超 1 MiB 输出、其余查询错误 →
+  8 / TRANSPORT_NOT_CONFIGURED。所有入账前失败均断言对应 request_id 零行。
+- 仅 known_success + code ok + exit 0 + 相符 agent_id 放行。拒绝 simulated，
+  删除子进程 GBT_MOCK* / GBT_ALLOW_WRITES。保留入账与启动前两道 verify。
+- health：有可执行 gbc 报 gbc；无则 not_configured；testhost 独占 test_only。
+  notification_transport 始终 not_configured。gbc 存在不代表登录已有效。
+- 不转发 gbc 原始 stdout/stderr/error，不读其 store 或官方 App 凭据，stdin 关闭。
+
+## TDD 与最终核验
+
+逐片实际观察 red→green：auth 查询收据缺失；not_found 原得 8 需 5；
+成功原得 8 需 0；unknown 原得 8 需 10；permission_denied 原得 8 需 5。
+每片随后单文件运行通过；中途一次型别检查发现 execFile error.code 的 string|number
+收窄问题，修正后通过。这些 red 是运行时控制台记录，不伪称保留了 red 日志文件。
+随后补充 exact id/伪造 IPC、模拟环境、坏响应/超时/超限、无执行权限、帮助文本保密、
+启动前凭据失效等公共 CLI 契约回归；未测试私有 verifier 函数或 mock 内部协作者。
+
+最终执行正式包和原 spike 的 `bun run verify`，二者 exit 0：
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| 正式源码 | 44 / 0 | 260 | 21.72s |
+| 正式编译 | 24 / 0 | 176 | 10.36s |
+| spike 源码 | 11 / 0 | 193 | 25.75s |
+| spike 编译 | 11 / 0 | 193 | 10.41s |
+
+两包型别检查通过。日志：`evidence/gbc-verifier/{verify,spike-regression}.log`。
+生产二进制 109,947,056 bytes；独立 test-host 109,631,664 bytes。
+编译契约复制二进制到隔离 cwd、暂时移走源码；每例 HOME 私有、PATH 仅有该例
+初始为空的 mock 目录。mock gbc/claude 使用 /bin/sh 的内建命令，无 PATH 工具链。
+这是 Linux + procfs + /bin/sh 环境验收，不是无系统依赖或跨平台证明。
+
+## 未做与证据界限
+
+这是 **mock gbc 身份门闩验收**，不是 live OAuth、刷新、真实 bot、团队绑定或
+四家 CLI E2E。未访问真实 ~/.gbc、官方凭据、真实后端、App 二进制或用户机器。
+操作者应自行完成 gbc 独立登录，Linux daemon 使用其既有凭据与启动时环境。
+外部 PATH 上的 gbc 必须由操作者信任，不防同 UID 恶意替换。
+没有实现通知、ACK/重试、浏览器登录、agentwatch auth login 或平台扩展。
+未 push / 开 PR / merge / 发布；需父代理独立审查。
+
+---
+
+# t179 cleanup results — historical
 
 2026-11-20, Asia/Shanghai. Fixed base: `43b8c5b7d8fb2a077b99cc10795a4632b108c05e`.
 Scope is only the two low-risk Standards cleanup suggestions. Previously closed
@@ -38,7 +97,7 @@ are unchanged. Owned-process audit: `evidence/review-cleanup/cleanup-audit.json`
 
 ---
 
-# t178 review-fix results — current
+# t178 review-fix results — historical
 
 2026-11-20, Asia/Shanghai. Fixed base: `cb8fa40330dfdbddbfb028901e46d90a957ef729`.
 Scope is only the five reviewed findings; original implementation/experiment

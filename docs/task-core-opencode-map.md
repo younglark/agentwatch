@@ -68,3 +68,13 @@ OpenCode 就把未实现项或未测平台标成通过。
 ## t179 清理
 
 仅处理审查提出的两项资源清理：失败路径文件 fd 用 keep+finally 关闭（关闭失败单独吞掉再映射 IPC_AUTH），以及目录替换测试的路径复原与 close/rm 分层。不改变既有任务/IPC 契约，也不新增平台 PoC。准确证据见 packages/agentwatch/RESULTS.md 与 evidence/review-cleanup/。
+
+## t183：外部 gbc 门闩差异（2026-11-20，Asia/Shanghai）
+
+用户同意采用非官方 grokbot-control，不再要求仅官方公开 API；通知实现已解禁但本轮不做。
+沿用既有 verifier/executor 边界与无 shell argv 子进程方式，新增 `src/gbc-verifier.ts`：
+PATH 定位外部 gbc，只执行 `--json bot get --agent-id=…`，验证结果封套和精确 agent_id。
+入账前/启动前两次核验位置保持不变；无 gbc/auth、拒绝、未知、超时或坏响应均 fail closed。
+不重复登录/RPC PoC，不打包 gbc/proto，不读官方凭据；health 的 gbc 仅指可执行文件可定位。
+此切片已经 mock gbc 源码/编译契约验证；live 身份、OAuth 刷新与四家 E2E 仍未验收。
+通用模块参考不变；当前完整边界与真实测试数见正式包 README / RESULTS。
