@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
 import { test,expect } from 'bun:test';
-import { readFileSync,writeFileSync,statSync,existsSync,chmodSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
+import { readFileSync,writeFileSync,statSync,existsSync,chmodSync,linkSync,renameSync,symlinkSync,unlinkSync,mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { commandHarness,until,alive } from './command-harness.ts';
 import { readRegistration,request } from '../src/service.ts';
@@ -51,240 +51,156 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const wizard=await h.call('run',['--wizard']);expect(wizard.code).toBe(2);expect(wizard.out).toBe('');expect(JSON.parse(wizard.err).error.code).toBe('USAGE');
     expect(run.err).not.toContain(info.token);
   });
-  check('production gbc auth failure is closed and never leaks child diagnostics',async h=>{
-    h.mockGbc(4,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unauthenticated',retryable:false,request_id:'fixture',error:{message:'SECRET_GBC_TOKEN'}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-auth','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('AUTH_NOT_CONFIGURED');
-    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,'gbc-auth')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
-    expect(readFileSync(join(h.root,'gbc-calls'),'utf8')).toContain('query');
+  check('direct Connect exact agent_id uses bound private credentials without a tool on PATH',async h=>{
+    h.mockConnect();
+    const run=await h.call('run',['--bot','test-bot','--request-id','direct-ok','--cwd',h.cwd,'--',h.nativeFixture()]);
+    expect(run.code,run.err).toBe(0);
+    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code,done.err).toBe(0);
+    const lookups=h.calls.filter(c=>c.method==='ListGrokBotAgents');expect(lookups).toHaveLength(2);
+    for(const call of lookups){expect(call.body).toEqual({});expect(call.authorization).toBe('Bearer SYNTHETIC_PRIVATE_TOKEN');expect(call.headers['connect-protocol-version']).toBe('1');expect(call.headers['content-type']).toBe('application/json');}
+    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('connect_http');expect(existsSync(join(h.bin,'gbc'))).toBe(false);
   });
-  for(const code of ['auth_revoked','auth_refresh_unconfigured','auth_refresh_client_mismatch','auth_refresh_subject_mismatch'] as const)
-    check(`production gbc ${code} exit9 is auth unavailable before admission and launch`,async h=>{
-      const error={schema_version:'1.0.0',ok:false,outcome:'known_failure',code,retryable:false,request_id:'fixture',error:{message:'SECRET_REFRESH_TOKEN'}};
-      h.mockGbc(9,error);
+  for(const code of ['auth','unauthenticated','auth_revoked','auth_refresh_unconfigured','auth_refresh_client_mismatch','auth_refresh_subject_mismatch'])
+    check(`direct Connect ${code} is auth unavailable before admission and launch`,async h=>{
+      h.mockConnect({lookup:()=>({status:401,body:{code,message:'SECRET_REFRESH_TOKEN'}})});
       const rejected=await h.call('run',['--bot','test-bot','--request-id',code,'--cwd',h.cwd,'--','claude']);
-      expect(rejected.code,rejected.err).toBe(4);expect(rejected.out).toBe('');expect(JSON.parse(rejected.err).error.code).toBe('AUTH_NOT_CONFIGURED');
-      expect(ledgerRows(h.state,code)).toHaveLength(0);expect(rejected.err).not.toContain('SECRET_REFRESH_TOKEN');
-      h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},`if [ -f "$HOME/review-checked" ]; then
-printf '%s\\n' '${JSON.stringify(error)}' >&2
-exit 9
-fi
-: > "$HOME/review-checked"`);
-      const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf yes > auth-launched\n',{mode:0o700});
-      const run=await h.call('run',['--bot','test-bot','--request-id',code+'-launch','--cwd',h.cwd,'--',fixture]);
-      expect(run.code,run.err).toBe(0);expect(ledgerRows(h.state,code+'-launch')).toHaveLength(1);
-      const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);
-      expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(existsSync(join(h.cwd,'auth-launched'))).toBe(false);
-      expect(run.out+run.err+done.out+done.err+readFileSync(join(h.state,'diagnostics.log'),'utf8')).not.toContain('SECRET_REFRESH_TOKEN');
+      expect(rejected.code,rejected.err).toBe(4);expect(rejected.out).toBe('');expect(JSON.parse(rejected.err).error.code).toBe('AUTH_NOT_CONFIGURED');expect(ledgerRows(h.state,code)).toHaveLength(0);expect(rejected.err).not.toContain('SECRET_REFRESH_TOKEN');
+      h.mockConnect({lookup:(_,count)=>count===2?{body:{agents:[{agentId:'test-bot'}]}}:{status:401,body:{code,message:'SECRET_REFRESH_TOKEN'}}});
+      const run=await h.call('run',['--bot','test-bot','--request-id',code+'-launch','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code,run.err).toBe(0);
+      const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(done.out+done.err+readFileSync(join(h.state,'diagnostics.log'),'utf8')).not.toContain('SECRET_REFRESH_TOKEN');
     });
-  check('production gbc not_found denies admission and reports adapter availability',async h=>{
-    h.mockGbc(5,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'not_found',retryable:false,request_id:'fixture'});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-missing','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('BOT_FORBIDDEN');
-    expect(ledgerRows(h.state,'gbc-missing')).toHaveLength(0);expect(h.receipts()).toHaveLength(0);
-    const health=await request(readRegistration(h.state)!,'health',{});
-    expect(health.bot_verifier).toBe('gbc');expect(health.notification_transport).toBe('gbc');
+  for(const [name,reply,exit,error] of [
+    ['missing',{body:{agents:[]}},5,'BOT_FORBIDDEN'],
+    ['aliases',{body:{agents:[{agentId:'other',id:'test-bot',name:'test-bot'}]}},5,'BOT_FORBIDDEN'],
+    ['denied',{status:403,body:{code:'permission_denied',message:'SECRET_BODY'}},5,'BOT_FORBIDDEN'],
+    ['truncated',{body:{agents:[],truncated:true}},10,'UNKNOWN'],
+    ['bad-json',{body:'SECRET_BODY'},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['redirect',{status:302,body:{},headers:{location:'/trap'}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['missing-agent-id',{body:{agents:[{name:'test-bot'}]}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['error-on-200',{body:{code:'unauthenticated'}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['cli-envelope',{body:{schema_version:'1.0.0',ok:true,data:{bot:{agent_id:'test-bot'}}}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['unsupported',{status:500,body:{code:'unsupported'}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['unknown-auth',{status:401,body:{code:'auth_future_code'}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['refresh-network',{status:503,body:{code:'auth_refresh_network'}},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['timeout',{hang:true},8,'TRANSPORT_NOT_CONFIGURED'],
+    ['oversized',{oversized:true},8,'TRANSPORT_NOT_CONFIGURED'],
+  ] as const)check(`direct Connect lookup ${name} is bounded and fail closed`,async h=>{
+    h.mockConnect({lookup:()=>reply});const started=Date.now();
+    const run=await h.call('run',['--bot','test-bot','--request-id',name,'--cwd',h.cwd,'--','claude']);expect(run.code,run.err).toBe(exit);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe(error);expect(ledgerRows(h.state,name)).toHaveLength(0);expect(run.err).not.toContain('SECRET_BODY');expect(Date.now()-started).toBeLessThan(8000);
+    const health=await request(readRegistration(h.state)!,'health',{});expect(health.bot_verifier).toBe('connect_http');
   });
-  check('production gbc exact agent_id admits a fixture and rechecks before launch',async h=>{
-    h.env.GBT_MOCK='1';
-    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot',id:'42',name:'not a selector'}}},'[ "${GBT_MOCK+x}" != x ] || exit 2');
-    const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf "fixture only\\n"\n',{mode:0o700});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-allowed','--cwd',h.cwd,'--',fixture]);
-    expect(run.code,run.err).toBe(0);expect(run.err).toBe('');expect(ledgerRows(h.state,'gbc-allowed')).toHaveLength(1);
-    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);
-    expect(done.code,done.err).toBe(0);expect(done.value.data.task.state).toBe('succeeded');
-    expect((await h.call('logs',[run.value.data.id])).value.data.text).toBe('fixture only\n');
-    expect(readFileSync(join(h.root,'gbc-calls'),'utf8').trim().split('\n')).toHaveLength(2);
-    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('gbc');
-  });
-  check('production gbc unknown outcome preserves uncertainty without inserting a task',async h=>{
-    h.mockGbc(10,{schema_version:'1.0.0',ok:false,outcome:'unknown',code:'lookup_incomplete',retryable:false,request_id:'fixture',error:{message:'SECRET_GBC_TOKEN'}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-unknown','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(10);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('UNKNOWN');
-    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,'gbc-unknown')).toHaveLength(0);
-  });
-  check('production gbc permission_denied maps to bot authorization failure',async h=>{
-    h.mockGbc(7,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'permission_denied',retryable:false,request_id:'fixture'});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-denied','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('BOT_FORBIDDEN');
-    expect(ledgerRows(h.state,'gbc-denied')).toHaveLength(0);
-  });
-  check('production gbc rejects server-id and name aliases even with forged fake fields',async h=>{
-    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'other-agent',id:'test-bot',name:'test-bot'}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-alias','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(5);expect(run.out).toBe('');expect(ledgerRows(h.state,'gbc-alias')).toHaveLength(0);
-    await expect(request(readRegistration(h.state)!,'run',{request_id:'gbc-forged',bot:'test-bot',cwd:h.cwd,argv:['claude'],testOnly:true,verifier:'fake'})).rejects.toMatchObject({code:'BOT_FORBIDDEN'});
-    expect(ledgerRows(h.state,'gbc-forged')).toHaveLength(0);
-  });
-  check('production gbc rejects simulated envelopes despite inherited mock env',async h=>{
-    h.env.GBT_MOCK='1';
-    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',simulated:true,data:{bot:{agent_id:'test-bot'}}},'[ "${GBT_MOCK+x}" != x ] || exit 2');
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-simulated','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(8);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('TRANSPORT_NOT_CONFIGURED');expect(ledgerRows(h.state,'gbc-simulated')).toHaveLength(0);
-  });
-  for(const [name,code,envelope,extra] of [
-    ['non-json',0,'SECRET_GBC_TOKEN',''],
-    ['schema-mismatch',0,{schema_version:'2.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
-    ['missing-agent-id',0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{name:'test-bot'}}},''],
-    ['non-auth-exit9',9,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unsupported',retryable:false,request_id:'fixture'},''],
-    ['unknown-auth-code',9,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_future_code',retryable:false,request_id:'fixture'},''],
-    ['retryable-auth-refresh',8,{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_refresh_network',retryable:true,request_id:'fixture'},''],
-    ['inconsistent-exit',4,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},''],
-    ['timeout',0,'SECRET_GBC_TOKEN','while :; do :; done'],
-    ['oversized',0,'SECRET_GBC_TOKEN',`while :; do printf '%s' '${'x'.repeat(4096)}'; done`],
-  ] as const)check(`production gbc ${name} fails closed with bounded private diagnostics`,async h=>{
-    h.mockGbc(code,envelope,extra);
-    const started=Date.now(),requestId='gbc-'+name;
-    const run=await h.call('run',['--bot','test-bot','--request-id',requestId,'--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(8);expect(run.out).toBe('');expect(JSON.parse(run.err).error.code).toBe('TRANSPORT_NOT_CONFIGURED');
-    expect(run.err).not.toContain('SECRET_GBC_TOKEN');expect(ledgerRows(h.state,requestId)).toHaveLength(0);expect(Date.now()-started).toBeLessThan(8000);
-  });
-  check('production ignores a non-executable gbc and help never consults credentials',async h=>{
-    const file=join(h.bin,'gbc');writeFileSync(file,'SECRET_GBC_TOKEN',{mode:0o600});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-nonexec','--cwd',h.cwd,'--','claude']);
-    expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(ledgerRows(h.state,'gbc-nonexec')).toHaveLength(0);
-    expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('not_configured');
+  for(const mode of ['public-file','public-dir','symlink','hardlink','symlink-parent','oversized','expired','unbound-client','client-mismatch','unsafe-backend'] as const)
+    check(`agentwatch credentials ${mode} never reach HTTP or admission`,async h=>{
+      h.configureAuth();
+      if(mode==='public-file')chmodSync(h.credentials,0o644);
+      if(mode==='public-dir')chmodSync(join(h.home,'.agentwatch','auth'),0o755);
+      if(mode==='symlink'){const value=readFileSync(h.credentials);unlinkSync(h.credentials);writeFileSync(join(h.home,'synthetic'),value,{mode:0o600});symlinkSync(join(h.home,'synthetic'),h.credentials);}
+      if(mode==='hardlink')linkSync(h.credentials,join(h.home,'hardlink'));
+      if(mode==='symlink-parent'){renameSync(join(h.home,'.agentwatch'),join(h.home,'auth-real'));symlinkSync(join(h.home,'auth-real'),join(h.home,'.agentwatch'));}
+      if(mode==='oversized')writeFileSync(h.credentials,'x'.repeat(16385));
+      if(mode==='expired')h.configureAuth({expires_at_ms:1});
+      if(mode==='unbound-client')h.configureAuth({client_id:null});
+      if(mode==='client-mismatch')h.env.AGENTWATCH_CLIENT_ID='other-client';
+      if(mode==='unsafe-backend')h.configureAuth({backend:'http://example.invalid'});
+      const run=await h.call('run',['--bot','test-bot','--request-id',mode,'--cwd',h.cwd,'--','claude']);expect(run.code,run.err).toBe(4);expect(run.out).toBe('');expect(h.calls).toHaveLength(0);expect(ledgerRows(h.state,mode)).toHaveLength(0);expect(run.err).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect((await request(readRegistration(h.state)!,'health',{})).bot_verifier).toBe('not_configured');
+    });
+  check('client id may be explicitly configured but gbc files and GBT env are never consulted',async h=>{
     mkdirSync(join(h.home,'.gbc'));writeFileSync(join(h.home,'.gbc','credentials.json'),'SECRET_GBC_TOKEN',{mode:0o600});
-    const help=await h.call('run',['--help']);expect(help.code,help.err).toBe(0);expect(help.out).toContain('--bot');expect(help.out+help.err+run.err).not.toContain('SECRET_GBC_TOKEN');
+    writeFileSync(join(h.bin,'gbc'),'#!/bin/sh\nexit 99\n',{mode:0o700});h.env.GBT_MOCK='1';
+    const help=await h.call('run',['--help']);expect(help.code).toBe(0);expect(h.calls).toHaveLength(0);
+    h.mockConnect();h.configureAuth({client_id:undefined});h.env.AGENTWATCH_CLIENT_ID='explicit-client';
+    const run=await h.call('run',['--bot','test-bot','--request-id','env-client','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code,run.err).toBe(0);expect((await h.call('wait',[run.value.data.id,'--timeout','5'])).code).toBe(0);
+    expect(run.out+run.err+help.out+help.err).not.toContain('SECRET_GBC_TOKEN');
   });
-  check('production gbc credential loss after admission prevents native launch',async h=>{
-    h.mockGbc(0,{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{bot:{agent_id:'test-bot'}}},`if [ -f "$HOME/checked" ]; then
-printf '%s\\n' '{"schema_version":"1.0.0","ok":false,"outcome":"known_failure","code":"auth","retryable":false,"request_id":"fixture"}' >&2
-exit 4
-fi
-: > "$HOME/checked"`);
-    const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf yes > launched\n',{mode:0o700});
-    const run=await h.call('run',['--bot','test-bot','--request-id','gbc-expired','--cwd',h.cwd,'--',fixture]);
-    expect(run.code,run.err).toBe(0);expect(ledgerRows(h.state,'gbc-expired')).toHaveLength(1);
-    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);
-    expect(done.value.data.task.error_code).toBe('AUTH_NOT_CONFIGURED');expect(done.value.data.task.pid).toBeNull();expect(existsSync(join(h.cwd,'launched'))).toBe(false);
-  });
-  check('gbc notification acceptance is persisted once without claiming durable delivery',async h=>{
-    h.mockNotifications();
-    const args=['--bot','test-bot','--request-id','notify-accepted','--cwd',h.cwd,'--',h.nativeFixture(),'SECRET_ARGV'];
+  check('direct notification acceptance persists once with frozen bounded request fields',async h=>{
+    h.mockConnect();const args=['--bot','test-bot','--request-id','notify-accepted','--cwd',h.cwd,'--',h.nativeFixture(),'SECRET_ARGV'];
     const run=await h.call('run',args);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
     const accepted=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
-    expect(accepted.value.data.state).toBe('succeeded');expect(accepted.value.data.notification).toMatchObject({transport:'gbc',attempts:1,needs_reconciliation:false,receipt:{delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:'workflow-fixture'}});
-    expect(accepted.out).not.toContain('SECRET_');expect(accepted.out).not.toContain('delivered');
-    const body=readFileSync(join(h.root,'notification-body'),'utf8');expect(body.length).toBeLessThan(1024);expect(body).not.toContain('SECRET_');
-    expect(Object.keys(JSON.parse(body))).toEqual(['version','event_id','task_id','state','exit_code','error_code']);
-    expect(JSON.parse(body)).toMatchObject({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null});
-    expect((await h.call('run',args)).value.data.id).toBe(id);
-    const info=readRegistration(h.state)!;expect((await request(info,'health',{})).notification_transport).toBe('gbc');
-    await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
-    expect((await h.call('status',[id])).value.data.notification).toEqual(accepted.value.data.notification);
-    expect(h.notificationCalls()).toHaveLength(1);expect(ledgerRows(h.state,'notify-accepted')).toHaveLength(1);
+    expect(accepted.value.data.state).toBe('succeeded');expect(accepted.value.data.notification).toMatchObject({transport:'connect_http',attempts:1,durability:'unverified',needs_reconciliation:false,receipt:{delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:'workflow-fixture'}});
+    const sent=h.calls.filter(c=>c.method==='SendGrokBotUserMessage');expect(sent).toHaveLength(1);expect(Object.keys(sent[0]!.body)).toEqual(['agentId','messageId','sessionId','text','sentAtMs']);expect(sent[0]!.body).toMatchObject({agentId:'test-bot',messageId:accepted.value.data.notification.message_id,sessionId:''});expect(sent[0]!.body.sentAtMs).toMatch(/^\d{13}$/);
+    const body=readFileSync(join(h.root,'notification-body'),'utf8');expect(body.length).toBeLessThan(1024);expect(body).not.toContain('SECRET_');expect(Object.keys(JSON.parse(body))).toEqual(['version','event_id','task_id','state','exit_code','error_code']);expect(JSON.parse(body)).toMatchObject({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null});
+    expect(accepted.out).not.toContain('SECRET_');expect((await h.call('run',args)).value.data.id).toBe(id);
+    const info=readRegistration(h.state)!;expect((await request(info,'health',{})).notification_transport).toBe('connect_http');await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification).toEqual(accepted.value.data.notification);expect(h.notificationCalls()).toHaveLength(1);
   });
-  check('gbc notification explicit refusal is persistent and never changes task success',async h=>{
-    h.mockNotifications({code:7,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'refused',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',dispatched:false,delivery:'refused',delivery_code:4,workflow_id:'workflow-refused',refusal:{failure_code:'denied',message:'SECRET_REFUSAL'}}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-refused','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
-    const rejected=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='rejected',4000);
-    expect(rejected.value.data.state).toBe('succeeded');expect(rejected.value.data.notification).toMatchObject({attempts:1,needs_reconciliation:false,last_code:'SEND_REFUSED',receipt:{delivery:'refused',delivery_code:4,dispatched:false,workflow_id:'workflow-refused'}});
-    expect(rejected.out).not.toContain('SECRET_REFUSAL');expect((await h.call('wait',[id,'--timeout','0'])).code).toBe(0);
-    await h.call('status',[id]);expect(h.notificationCalls()).toHaveLength(1);
+  check('credential loss after admission fails before native spawn without a real credential read',async h=>{
+    h.mockConnect({lookup:()=>{unlinkSync(h.credentials);return {body:{agents:[{agentId:'test-bot'}]}};}});
+    const fixture=join(h.bin,'claude');writeFileSync(fixture,'#!/bin/sh\nprintf yes > launched\n',{mode:0o700});
+    const run=await h.call('run',['--bot','test-bot','--request-id','lost-credentials','--cwd',h.cwd,'--',fixture]);expect(run.code,run.err).toBe(0);
+    const done=await h.call('wait',[run.value.data.id,'--timeout','5']);expect(done.code).toBe(1);expect(done.value.data.task).toMatchObject({state:'failed',pid:null,error_code:'AUTH_NOT_CONFIGURED'});expect(existsSync(join(h.cwd,'launched'))).toBe(false);expect(h.calls).toHaveLength(1);
+    expect(done.value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});
   });
-  check('gbc notification proven not dispatched is separate from uncertain writes',async h=>{
-    h.mockNotifications({code:9,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_revoked',retryable:false,request_id:'fixture',error:{message:'SECRET_AUTH_DIAGNOSTIC',details:{rpc_dispatched:false}}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-not-dispatched','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
-    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='not_dispatched',4000);
-    expect(result.value.data.state).toBe('succeeded');expect(result.value.data.notification).toMatchObject({attempts:1,last_code:'NOT_DISPATCHED',needs_reconciliation:false});
-    expect(result.out).not.toContain('SECRET_AUTH_DIAGNOSTIC');expect(h.notificationCalls()).toHaveLength(1);
+  check('credential loss after launch preserves terminal pending outbox until configured again',async h=>{
+    h.mockConnect({lookup:(_,count)=>{if(count===2)unlinkSync(h.credentials);return {body:{agents:[{agentId:'test-bot'}]}};}});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-credential-loss','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    const done=await h.call('wait',[id,'--timeout','5']);expect(done.code).toBe(0);expect(done.value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});expect(h.notificationCalls()).toHaveLength(0);
+    h.configureAuth();const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);expect(result.value.data.state).toBe('succeeded');expect(h.notificationCalls()).toHaveLength(1);
   });
-  check('gbc notification retries only proven pre-dispatch retryable failures with a fixed budget',async h=>{
-    h.mockNotifications({code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'auth_refresh_network',retryable:true,request_id:'fixture',error:{message:'SECRET_RETRY',details:{rpc_dispatched:false}}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-safe-retry','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
-    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='not_dispatched'&&r.value.data.notification.attempts===3,4000);
-    expect(result.value.data.state).toBe('succeeded');expect(result.out).not.toContain('SECRET_RETRY');
-    expect(h.notificationCalls()).toHaveLength(3);expect(new Set(h.notificationCalls().map(c=>c.message_id)).size).toBe(1);
-    const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
-    expect((await h.call('status',[id])).value.data.notification.attempts).toBe(3);expect(h.notificationCalls()).toHaveLength(3);
-  });
-  check('gbc notification daemon crash recovers inflight as unknown without replay',async h=>{
-    h.mockNotifications({extra:'while :; do :; done'});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-crash','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
-    await until(async()=>h.notificationCalls(),calls=>calls.length===1);
-    const old=readRegistration(h.state)!;expect((await h.call('status',[id])).value.data.notification.state).toBe('inflight');
-    process.kill(old.pid,'SIGKILL');await until(async()=>alive(old.pid),v=>!v,3000);
-    const sender=h.notificationCalls()[0]!.pid;if(alive(sender)){process.kill(sender,'SIGKILL');await until(async()=>alive(sender),v=>!v,3000);}
-    const restarted=await h.call('status',[id]);expect(restarted.code,restarted.err).toBe(0);
-    expect(restarted.value.data).toMatchObject({state:'succeeded',notification:{state:'unknown',attempts:1,needs_reconciliation:true,last_code:'INTERRUPTED_SEND'}});
-    await h.call('status',[id]);expect(h.notificationCalls()).toHaveLength(1);
-  });
-  check('gbc notification uncertain write reconciles by read-only send status without resending',async h=>{
-    h.mockNotifications({envelope:'SECRET_LOST_RESPONSE',status:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',session_id:null,session_source:'default_unreported',status:'accepted',status_code:2,echo_entry_id:'echo-fixture',rejection_code:null,accepted_at_ms:'1794454564087'}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-reconcile','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
-    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.last_code==='STATUS_ACCEPTED',4000);
-    expect(result.value.data).toMatchObject({state:'succeeded',notification:{state:'accepted',attempts:1,reconciliation_attempts:1,receipt:{status:'accepted',status_code:2,echo_entry_id:'echo-fixture',accepted_at_ms:'1794454564087'}}});
-    expect(result.out).not.toContain('SECRET_LOST_RESPONSE');expect(result.out).not.toContain('delivered');expect(h.notificationCalls()).toHaveLength(1);
-    const reads=readFileSync(join(h.root,'reconciliation-calls'),'utf8').trim().split('\n');expect(reads).toEqual([h.notificationCalls()[0]!.message_id]);
-  });
-  for(const [delivery,delivery_code] of [['accepted_box',1],['duplicate',3]] as const)
-    check(`gbc notification preserves ${delivery} as acceptance evidence only`,async h=>{
-      h.mockNotifications({envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',dispatched:false,delivery,delivery_code,workflow_id:null}}});
-      const run=await h.call('run',['--bot','test-bot','--request-id','notice-'+delivery,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
-      const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);
-      expect(result.value.data.notification.receipt).toMatchObject({delivery,delivery_code,dispatched:false,workflow_id:null});expect(h.notificationCalls()).toHaveLength(1);expect(result.out).not.toContain('delivered');
+  for(const [delivery,code,expected] of [['ACCEPTED_BOX',1,'accepted'],['DUPLICATE',3,'accepted'],['REFUSED',4,'rejected']] as const)
+    check(`direct notification ${delivery} is acceptance/refusal evidence, never durable success`,async h=>{
+      h.mockConnect({send:()=>({body:{delivery:'GROK_BOT_USER_MESSAGE_DELIVERY_'+delivery,dispatched:false,workflowId:'workflow-fixture'}})});
+      const run=await h.call('run',['--bot','test-bot','--request-id',delivery,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+      const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state===expected,4000);
+      expect(result.value.data.state).toBe('succeeded');expect(result.value.data.notification).toMatchObject({attempts:1,durability:'unverified',needs_reconciliation:false,receipt:{delivery:delivery.toLowerCase(),delivery_code:code,dispatched:false,workflow_id:'workflow-fixture'}});expect(h.notificationCalls()).toHaveLength(1);
     });
-  for(const [name,options] of [
-    ['timeout',{extra:'while :; do :; done'}],
-    ['lost-response',{extra:'exit 0'}],
-    ['bad-json',{envelope:'SECRET_RAW_RESPONSE'}],
-    ['unknown-outcome',{code:10,envelope:{schema_version:'1.0.0',ok:false,outcome:'unknown',code:'unknown',retryable:true,request_id:'fixture',error:{message:'SECRET_RAW_RESPONSE'}}}],
-    ['possibly-dispatched',{code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unavailable',retryable:true,request_id:'fixture',error:{message:'SECRET_RAW_RESPONSE',details:{rpc_dispatched:true}}}}],
-    ['simulated',{envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',simulated:true,data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:null}}}],
-    ['wrong-message',{envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'other-message',delivery:'accepted_temporal',delivery_code:2,dispatched:true,workflow_id:null}}}],
-    ['contradictory-dispatch',{code:8,envelope:{schema_version:'1.0.0',ok:false,outcome:'known_failure',code:'unavailable',retryable:true,request_id:'fixture',error:{details:{rpc_dispatched:false}},data:{delivery:'accepted_temporal',dispatched:true}}}],
-    ['oversized-stdout',{extra:`while :; do printf '%s' '${'x'.repeat(4096)}'; done`}],
-    ['oversized-stderr',{extra:`while :; do printf '%s' '${'x'.repeat(4096)}' >&2; done`}],
-  ] as const)check(`gbc notification ${name} stays unknown and cannot auto-replay after restart`,async h=>{
-    h.mockNotifications(options);
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-'+name,'--cwd',h.cwd,'--',h.nativeFixture(name==='bad-json'?7:0)]);expect(run.code).toBe(0);const id=run.value.data.id;
-    const unknown=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='unknown'&&r.value.data.notification.reconciliation_attempts===1,6500);
-    expect(unknown.value.data.notification).toMatchObject({attempts:1,needs_reconciliation:true});expect(unknown.value.data.state).toBe(name==='bad-json'?'failed':'succeeded');
-    expect(unknown.out).not.toContain('SECRET_RAW_RESPONSE');expect(unknown.out.length).toBeLessThan(2000);expect(h.notificationCalls()).toHaveLength(1);
-    const sender=h.notificationCalls()[0]!.pid;expect(alive(sender)).toBe(false);
-    const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
-    expect((await h.call('status',[id])).value.data.notification).toEqual(unknown.value.data.notification);expect(h.notificationCalls()).toHaveLength(1);
-    expect(readFileSync(join(h.root,'reconciliation-calls'),'utf8').trim().split('\n')).toHaveLength(1);
+  for(const [name,reply] of [
+    ['timeout',{hang:true}],['lost-response',{lost:true}],['bad-json',{body:'SECRET_RAW_RESPONSE'}],['oversized',{oversized:true}],
+    ['redirect',{status:302,body:{},headers:{location:'/trap'}}],
+    ['unavailable',{status:503,body:{code:'unavailable',message:'SECRET_RAW_RESPONSE',retryable:true}}],
+    ['forged-pre-dispatch',{status:503,body:{code:'auth_refresh_network',retryable:true,details:{rpc_dispatched:false}}}],
+    ['forged-auth-not-dispatched',{status:401,body:{code:'auth_revoked',details:{rpc_dispatched:false}}}],
+    ['contradictory',{body:{delivery:2,dispatched:true,error:{rpc_dispatched:false}}}],
+    ['contradictory-refusal',{body:{delivery:2,dispatched:true,refusal:{message:'SECRET_RAW_RESPONSE'}}}],
+    ['wrong-type',{body:{delivery:2,dispatched:'true'}}],['unknown-enum',{body:{delivery:99,dispatched:true}}],
+    ['cli-envelope',{body:{schema_version:'1.0.0',ok:true,data:{delivery_code:2}}}],
+    ['contradictory-enum',{body:{delivery:2,delivery_code:4,dispatched:true}}],
+    ['foreign-message',{body:{delivery:2,dispatched:true,messageId:'wrong-message'}}],
+  ] as const)check(`direct notification ${name} remains unknown without replay across restart`,async h=>{
+    h.mockConnect({send:()=>reply});const run=await h.call('run',['--bot','test-bot','--request-id','notice-'+name,'--cwd',h.cwd,'--',h.nativeFixture(name==='bad-json'?7:0)]);expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+    const result=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='unknown'&&r.value.data.notification.reconciliation_attempts===1,6500);
+    expect(result.value.data.notification).toMatchObject({attempts:1,durability:'unverified',needs_reconciliation:true});expect(result.value.data.state).toBe(name==='bad-json'?'failed':'succeeded');expect(result.out).not.toContain('SECRET_RAW_RESPONSE');expect(result.out.length).toBeLessThan(2000);expect(h.notificationCalls()).toHaveLength(1);
+    const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);expect((await h.call('status',[id])).value.data.notification).toEqual(result.value.data.notification);expect(h.notificationCalls()).toHaveLength(1);
+    expect(h.calls.filter(c=>c.method==='GetGrokBotSendStatus')).toHaveLength(1);
   });
-  check('gbc notification absent transport preserves pending across daemon restart',async h=>{
-    const host=(await h.startHost())!;
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-unconfigured','--cwd',h.cwd,'--','claude']);expect(run.code).toBe(0);const id=run.value.data.id;
-    expect((await h.call('wait',[id,'--timeout','5'])).value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});
-    await request(host,'shutdown',{});await until(async()=>alive(host.pid),v=>!v,3000);
-    expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0,event_id:id+':terminal:1'});
-    expect((await request(readRegistration(h.state)!,'health',{})).notification_transport).toBe('not_configured');expect(h.notificationCalls()).toHaveLength(0);
-    h.mockNotifications();const restored=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);
-    expect(restored.value.data.notification).toMatchObject({event_id:id+':terminal:1',attempts:1});expect(h.notificationCalls()).toHaveLength(1);
+  check('direct notification recovers crash-inflight as unknown, not a repeated write',async h=>{
+    h.mockConnect({send:()=>({hang:true})});const run=await h.call('run',['--bot','test-bot','--request-id','notice-crash','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+    await until(async()=>h.notificationCalls(),c=>c.length===1);expect((await h.call('status',[id])).value.data.notification.state).toBe('inflight');const old=readRegistration(h.state)!;process.kill(old.pid,'SIGKILL');await until(async()=>alive(old.pid),v=>!v,3000);
+    const result=await h.call('status',[id]);expect(result.code).toBe(0);expect(result.value.data).toMatchObject({state:'succeeded',notification:{state:'unknown',attempts:1,needs_reconciliation:true,last_code:'INTERRUPTED_SEND'}});await h.call('status',[id]);expect(h.notificationCalls()).toHaveLength(1);
   });
-  check('gbc notification drain aborts a hung sender and persists uncertainty within a bounded stop',async h=>{
-    h.mockNotifications({extra:'while :; do :; done'});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-drain','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
-    await until(async()=>h.notificationCalls(),c=>c.length===1);const info=readRegistration(h.state)!;
-    const started=Date.now();expect((await request(info,'drain',{})).active).toBe(0);expect(Date.now()-started).toBeLessThan(1500);
-    expect(alive(h.notificationCalls()[0]!.pid)).toBe(false);
-    expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'unknown',needs_reconciliation:true,attempts:1});expect(h.notificationCalls()).toHaveLength(1);
-    await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
-  });
-  check('gbc notification receipt fields are bounded and redact credential-shaped values',async h=>{
-    h.mockNotifications({envelope:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',dispatched:true,delivery:'accepted_temporal',delivery_code:2,workflow_id:'Bearer SYNTHETIC_PRIVATE_TOKEN',unexpected:'SECRET_UNEXPECTED'}}});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-safe-receipt','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
-    const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);
-    expect(result.value.data.notification.receipt.workflow_id).toBeNull();expect(result.out).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect(result.out).not.toContain('SECRET_UNEXPECTED');expect(result.out.length).toBeLessThan(2000);
-  });
-  for(const [status,status_code,expected] of [['rejected',3,'rejected'],['pending',4,'unknown'],['unknown_durability',5,'unknown']] as const)
-    check(`gbc notification read-only ${status} never implies durable delivery or a resend`,async h=>{
-      h.mockNotifications({extra:'exit 0',status:{schema_version:'1.0.0',ok:true,outcome:'known_success',code:'ok',retryable:false,request_id:'fixture',data:{agent_id:'test-bot',message_id:'__MESSAGE_ID__',status,status_code,echo_entry_id:null,rejection_code:status==='rejected'?'denied':null,accepted_at_ms:null}}});
-      const run=await h.call('run',['--bot','test-bot','--request-id','notice-status-'+status,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+  for(const [wire,code,expected] of [['ACCEPTED',2,'accepted'],['REJECTED',3,'rejected'],['NOT_FOUND',1,'unknown'],['PENDING',4,'unknown'],['UNKNOWN_DURABILITY',5,'unknown']] as const)
+    check(`direct read-only status ${wire} is reconciled at most once without a repeated send`,async h=>{
+      h.mockConnect({send:()=>({lost:true}),status:()=>({body:{status:'GROK_BOT_SEND_STATUS_'+wire,echoEntryId:'echo-fixture',acceptedAtMs:'1794454564087'}})});
+      const run=await h.call('run',['--bot','test-bot','--request-id','status-'+wire,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
       const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state===expected&&r.value.data.notification.reconciliation_attempts===1,4000);
-      expect(result.value.data.notification).toMatchObject({attempts:1,durability:'unverified',needs_reconciliation:expected==='unknown'});expect(h.notificationCalls()).toHaveLength(1);expect(result.out).not.toContain('delivered');
+      expect(result.value.data.notification).toMatchObject({attempts:1,durability:'unverified',needs_reconciliation:expected==='unknown'});
+      if(expected!=='unknown')expect(result.value.data.notification.receipt).toMatchObject({status:wire.toLowerCase(),status_code:code,echo_entry_id:'echo-fixture',accepted_at_ms:'1794454564087'});
+      const reads=h.calls.filter(c=>c.method==='GetGrokBotSendStatus');expect(reads).toHaveLength(1);expect(reads[0]!.body).toEqual({agentId:'test-bot',messageId:h.notificationCalls()[0]!.message_id,sessionId:''});expect(h.notificationCalls()).toHaveLength(1);
     });
-  check('gbc notification drain also aborts read-only reconciliation without leaking its process',async h=>{
-    h.mockNotifications({extra:'exit 0',statusExtra:'while :; do :; done'});
-    const run=await h.call('run',['--bot','test-bot','--request-id','notice-drain-status','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
-    await until(async()=>h.reconciliationPids(),p=>p.length===1);const info=readRegistration(h.state)!;
-    const started=Date.now();await request(info,'drain',{});expect(Date.now()-started).toBeLessThan(1500);expect(alive(h.reconciliationPids()[0]!)).toBe(false);
-    expect((await h.call('status',[run.value.data.id])).value.data.notification).toMatchObject({state:'unknown',attempts:1,reconciliation_attempts:1});expect(h.notificationCalls()).toHaveLength(1);
+  for(const [name,reply] of [['timeout',{hang:true}],['bad-json',{body:'SECRET_STATUS'}],['oversized',{oversized:true}],['unauthenticated',{status:401,body:{code:'unauthenticated',message:'SECRET_STATUS'}}],['invalid-type',{body:{status:'GROK_BOT_SEND_STATUS_ACCEPTED',echoEntryId:42}}],['contradictory',{body:{status:2,status_code:3}}]] as const)
+    check(`direct reconciliation ${name} remains unknown with one persisted read attempt`,async h=>{
+      h.mockConnect({send:()=>({lost:true}),status:()=>reply});const run=await h.call('run',['--bot','test-bot','--request-id','status-failure-'+name,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);const id=run.value.data.id;
+      await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='unknown'&&r.value.data.notification.reconciliation_attempts===1,4000);
+      // Persisted reconciliation claim precedes its network response; wait through timeout before restart.
+      if(name==='timeout')await until(async()=>h.activeHttp(),n=>n===0,4500);
+      const info=readRegistration(h.state)!;await request(info,'shutdown',{});await until(async()=>alive(info.pid),v=>!v,3000);
+      const result=await h.call('status',[id]);expect(result.value.data.notification).toMatchObject({state:'unknown',attempts:1,reconciliation_attempts:1,durability:'unverified'});expect(result.out).not.toContain('SECRET_STATUS');expect(h.calls.filter(c=>c.method==='GetGrokBotSendStatus')).toHaveLength(1);expect(h.notificationCalls()).toHaveLength(1);
+    });
+  check('direct notification receipt values are bounded and secret-shaped values omitted',async h=>{
+    h.mockConnect({send:()=>({body:{delivery:2,dispatched:true,workflowId:'Bearer SYNTHETIC_PRIVATE_TOKEN'}}),status:()=>({body:{status:2,echoEntryId:'Bearer PRIVATE',rejectionCode:'x'.repeat(100),acceptedAtMs:'not-an-int'}})});
+    const run=await h.call('run',['--bot','test-bot','--request-id','safe-receipt','--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);
+    const result=await until(()=>h.call('status',[run.value.data.id]),r=>r.value?.data.notification.state==='accepted',4000);expect(result.value.data.notification.receipt.workflow_id).toBeNull();expect(result.out).not.toContain('SYNTHETIC_PRIVATE_TOKEN');expect(result.out).not.toContain('SECRET_REFUSAL');
+  });
+  check('no credentials preserve pending outbox across restart and later direct configuration',async h=>{
+    const host=(await h.startHost())!;const run=await h.call('run',['--bot','test-bot','--request-id','notice-unconfigured','--cwd',h.cwd,'--','claude']);expect(run.code).toBe(0);const id=run.value.data.id;
+    expect((await h.call('wait',[id,'--timeout','5'])).value.data.task.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0});await request(host,'shutdown',{});await until(async()=>alive(host.pid),v=>!v,3000);
+    expect((await h.call('status',[id])).value.data.notification).toMatchObject({state:'pending',transport:'not_configured',attempts:0,event_id:id+':terminal:1'});expect(h.notificationCalls()).toHaveLength(0);
+    h.mockConnect();const restored=await until(()=>h.call('status',[id]),r=>r.value?.data.notification.state==='accepted',4000);expect(restored.value.data.notification).toMatchObject({event_id:id+':terminal:1',attempts:1});expect(h.notificationCalls()).toHaveLength(1);
+  });
+  for(const phase of ['send','status'] as const)check(`direct HTTP drain aborts hung ${phase} within bounded stop`,async h=>{
+    h.mockConnect(phase==='send'?{send:()=>({hang:true})}:{send:()=>({lost:true}),status:()=>({hang:true})});
+    const run=await h.call('run',['--bot','test-bot','--request-id','notice-drain-'+phase,'--cwd',h.cwd,'--',h.nativeFixture()]);expect(run.code).toBe(0);await until(async()=>h.activeHttp(),n=>n===1);
+    const info=readRegistration(h.state)!,started=Date.now();expect((await request(info,'drain',{})).active).toBe(0);expect(Date.now()-started).toBeLessThan(1500);
+    await until(async()=>h.activeHttp(),n=>n===0);expect((await h.call('status',[run.value.data.id])).value.data.notification).toMatchObject({state:'unknown',attempts:1,needs_reconciliation:true});expect(h.notificationCalls()).toHaveLength(1);
   });
   check('bot denial, program allowlist and malformed requests fail without stdout or spawn',async h=>{
     await h.startHost();

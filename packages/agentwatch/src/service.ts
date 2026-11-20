@@ -1,5 +1,6 @@
-import { gbcNotifications,type NotificationTransport } from './notifications.ts';
-import { verifyGbc,gbcPath } from './gbc-verifier.ts';
+import { connectNotifications,type NotificationTransport } from './notifications.ts';
+import { verifyConnect } from './connect-verifier.ts';
+import { connectReady } from './connect-client.ts';
 import { Schema } from 'effect';
 import { Database } from 'bun:sqlite';
 import { mkdirSync,realpathSync,lstatSync,writeFileSync,renameSync,readFileSync,unlinkSync,openSync,closeSync,constants,appendFileSync } from 'node:fs';
@@ -60,8 +61,8 @@ function ownsLease(state:string) {
 }
 export interface Adapters {verify:Verifier;execute:Executor;notifications?:NotificationTransport;testOnly?:boolean}
 export const productionAdapters:Adapters={
-  verify:verifyGbc,
-  execute:nativeExecutor,notifications:gbcNotifications,
+  verify:verifyConnect,
+  execute:nativeExecutor,notifications:connectNotifications,
 };
 export async function startDaemon(path:string,adapters:Adapters=productionAdapters) {
   const state=privateState(path),release=ownsLease(state);if(!release)return undefined;
@@ -96,7 +97,7 @@ export async function startDaemon(path:string,adapters:Adapters=productionAdapte
         let message:typeof Message.Type;
         try{message=Schema.decodeUnknownSync(Message)(await req.json());}catch{throw new CoreError('USAGE','Invalid local request');}
         const data=message.data as Record<string,unknown>,op=message.operation;
-        if(op==='health')return result({pid:process.pid,instance,scope,protocol:PROTOCOL,version:VERSION,bot_verifier:adapters.testOnly?'test_only':gbcPath()?'gbc':'not_configured',notification_transport:adapters.notifications?.available()?'gbc':'not_configured'});
+        if(op==='health')return result({pid:process.pid,instance,scope,protocol:PROTOCOL,version:VERSION,bot_verifier:adapters.testOnly?'test_only':connectReady()?'connect_http':'not_configured',notification_transport:adapters.notifications?.available()?'connect_http':'not_configured'});
         if(op==='run')return result(await engine!.run(data));
         if(op==='drain')return result(await engine!.drain());
         if(op==='shutdown'){setTimeout(()=>{void close();},30);return result({stopping:true,pid:process.pid});}

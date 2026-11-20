@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
-import { execFile } from 'node:child_process';
-import { gbcPath } from './gbc-verifier.ts';
+import { connectReady,connectRpc } from './connect-client.ts';
+import { CoreError } from './domain.ts';
 import { exitCodes,terminalStates } from './domain.ts';
 import { type Store,type NotificationRecord } from './storage.ts';
 export interface NoticeInput {message_id:string;bot:string;body:string;attempts:number}
@@ -10,63 +10,45 @@ export interface NotificationTransport {
   reconcile?(input:NoticeInput,signal:AbortSignal):Promise<NoticeResult & {state:'accepted'|'rejected'|'unknown'}>;
   send(input:NoticeInput,signal:AbortSignal):Promise<NoticeResult>;
 }
-const Envelope=Schema.Struct({schema_version:Schema.Literal('1.0.0'),ok:Schema.Boolean,outcome:Schema.String,code:Schema.String,retryable:Schema.Boolean,request_id:Schema.String,simulated:Schema.optional(Schema.Boolean),data:Schema.optional(Schema.Unknown),error:Schema.optional(Schema.Struct({details:Schema.optional(Schema.Struct({rpc_dispatched:Schema.optional(Schema.Boolean)}))}))});
-const SendData=Schema.Struct({agent_id:Schema.String,message_id:Schema.String,dispatched:Schema.Boolean,delivery:Schema.String,delivery_code:Schema.Number,workflow_id:Schema.NullOr(Schema.String)});
 const unknown=():NoticeResult=>({state:'unknown',code:'SEND_UNCERTAIN'});
 // Receipt identifiers only: omit oversized/credential-shaped values rather than truncate them.
 const receiptId=(value:string|null,max=128)=>value!==null&&value.length<=max&&/^[A-Za-z0-9_.:-]+$/.test(value)&&!/(?:bearer|eyJ[\w-]*\.|djEw|sk-|gh[pousr]_|github_pat_)/i.test(value)?value:null;
-async function runGbc(args:string[],body:string|undefined,signal:AbortSignal){
-    if(signal.aborted)return undefined;
-    const file=gbcPath();if(!file)return undefined;
-    const env={...process.env};for(const key of Object.keys(env))if(key.startsWith('GBT_MOCK'))delete env[key];delete env.GBT_ALLOW_WRITES;
-    return await new Promise<{code:number;out:string;err:string}|undefined>(resolve=>{
-      try{
-        const child=execFile(file,args,{env,timeout:3000,maxBuffer:1048576,killSignal:'SIGKILL',windowsHide:true},(error,out,err)=>{
-          signal.removeEventListener('abort',abort);
-          resolve(error&&typeof error.code!=='number'?undefined:{code:typeof error?.code==='number'?error.code:0,out,err});
-        });
-        const abort=()=>{child.kill('SIGKILL');};signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
-        child.stdin?.on('error',()=>{});
-        try{child.stdin?.end(body===undefined?undefined:body+'\n');}catch{abort();} // callback observes close before settling
-      }catch{resolve(undefined);}
-    });
+const Send=Schema.Struct({dispatched:Schema.optional(Schema.Boolean),delivery:Schema.Union([Schema.String,Schema.Number]),workflowId:Schema.optional(Schema.NullOr(Schema.String))});
+const Status=Schema.Struct({status:Schema.Union([Schema.String,Schema.Number]),echoEntryId:Schema.optional(Schema.String),rejectionCode:Schema.optional(Schema.String),acceptedAtMs:Schema.optional(Schema.String)});
+function enumCode(value:string|number,prefix:string,names:readonly string[]){
+  if(typeof value==='number')return Number.isInteger(value)&&value>=0&&value<names.length?value:-1;
+  return names.findIndex(name=>prefix+name.toUpperCase()===value);
 }
-export const gbcNotifications:NotificationTransport={
-  available:()=>!!gbcPath(),
+function wireObject(raw:unknown,allowed:readonly string[]){if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(key=>!allowed.includes(key)))throw new Error('Invalid response');return raw;}
+export const connectNotifications:NotificationTransport={
+  available:connectReady,
   async send(input,signal){
-    const result=await runGbc(['--json','--allow-writes','message','send',`--agent-id=${input.bot}`,`--message-id=${input.message_id}`,'--text-stdin'],input.body,signal);
-    if(!result)return unknown();
     try{
-      const envelope=Schema.decodeUnknownSync(Envelope)(JSON.parse(result.code===0?result.out:result.err));
-      if(envelope.simulated)return unknown();
-      if(result.code!==0&&!envelope.ok&&envelope.outcome==='known_failure'&&envelope.data===undefined&&envelope.error?.details?.rpc_dispatched===false)
-        return envelope.retryable&&result.code===8&&input.attempts<3
-          ?{state:'pending',code:'RETRY_NOT_DISPATCHED',next_attempt_at:Date.now()+250*2**(input.attempts-1)}
-          :{state:'not_dispatched',code:'NOT_DISPATCHED'};
-      if(envelope.retryable)return unknown();
-      const data=Schema.decodeUnknownSync(SendData)(envelope.data);
-      if(data.agent_id!==input.bot||data.message_id!==input.message_id)return unknown();
-      const receipt={agent_id:data.agent_id,message_id:data.message_id,delivery:data.delivery,delivery_code:data.delivery_code,dispatched:data.dispatched,workflow_id:receiptId(data.workflow_id)};
-      if(result.code===7&&!envelope.ok&&envelope.outcome==='known_failure'&&envelope.code==='refused'&&data.delivery_code===4&&data.delivery==='refused')
-        return {state:'rejected',code:'SEND_REFUSED',receipt};
-      if(envelope.ok&&envelope.outcome==='known_success'&&envelope.code==='ok'&&result.code===0&&((data.delivery_code===1&&data.delivery==='accepted_box')||(data.delivery_code===2&&data.delivery==='accepted_temporal')||(data.delivery_code===3&&data.delivery==='duplicate')))
-        return {state:'accepted',code:'SEND_ACCEPTED',receipt};
+      const raw=await connectRpc('SendGrokBotUserMessage',{agentId:input.bot,messageId:input.message_id,sessionId:'',text:input.body,sentAtMs:String(Date.now())},signal);
+      const data=Schema.decodeUnknownSync(Send)(wireObject(raw,['dispatched','delivery','workflowId','mode','refusal']));
+      const names=['unspecified','accepted_box','accepted_temporal','duplicate','refused'],code=enumCode(data.delivery,'GROK_BOT_USER_MESSAGE_DELIVERY_',names),delivery=names[code];
+      if(code!==4&&(raw as {refusal?:unknown}).refusal!=null)return unknown();
+      const receipt={agent_id:input.bot,message_id:input.message_id,delivery,delivery_code:code,dispatched:data.dispatched??false,workflow_id:receiptId(data.workflowId??null)};
+      if(code===4)return {state:'rejected',code:'SEND_REFUSED',receipt};
+      if(code>=1&&code<=3)return {state:'accepted',code:'SEND_ACCEPTED',receipt};
       return unknown();
-    }catch{return unknown();}
+    }catch(error){
+      // Only our own credential loader proves that no HTTP request was dispatched.
+      // A backend's rpc_dispatched/retryable claim is never pre-dispatch evidence.
+      if(error instanceof CoreError&&error.code==='AUTH_NOT_CONFIGURED')return {state:'pending',code:'NOT_CONFIGURED'};
+      return unknown();
+    }
   },
   async reconcile(input,signal){
-    const result=await runGbc(['--json','message','status',`--agent-id=${input.bot}`,`--message-id=${input.message_id}`],undefined,signal);
-    if(!result)return {state:'unknown',code:'STATUS_UNCERTAIN'};
     try{
-      const envelope=Schema.decodeUnknownSync(Envelope)(JSON.parse(result.code===0?result.out:result.err));
-      if(result.code!==0||!envelope.ok||envelope.simulated||envelope.retryable||envelope.outcome!=='known_success'||envelope.code!=='ok')return {state:'unknown',code:'STATUS_UNCERTAIN'};
-      const data=Schema.decodeUnknownSync(Schema.Struct({agent_id:Schema.String,message_id:Schema.String,status:Schema.String,status_code:Schema.Number,echo_entry_id:Schema.NullOr(Schema.String),rejection_code:Schema.NullOr(Schema.String),accepted_at_ms:Schema.NullOr(Schema.String)}))(envelope.data);
-      if(data.agent_id!==input.bot||data.message_id!==input.message_id)return {state:'unknown',code:'STATUS_UNCERTAIN'};
-      const receipt={agent_id:data.agent_id,message_id:data.message_id,status:data.status,status_code:data.status_code,echo_entry_id:receiptId(data.echo_entry_id),rejection_code:receiptId(data.rejection_code,64),accepted_at_ms:data.accepted_at_ms!==null&&/^\d{1,20}$/.test(data.accepted_at_ms)?data.accepted_at_ms:null};
-      if(data.status==='accepted'&&data.status_code===2)return {state:'accepted',code:'STATUS_ACCEPTED',receipt};
-      if(data.status==='rejected'&&data.status_code===3)return {state:'rejected',code:'STATUS_REJECTED',receipt};
-      return {state:'unknown',code:'STATUS_UNCERTAIN'};
-    }catch{return {state:'unknown',code:'STATUS_UNCERTAIN'};}
+      const raw=await connectRpc('GetGrokBotSendStatus',{agentId:input.bot,messageId:input.message_id,sessionId:''},signal);
+      const data=Schema.decodeUnknownSync(Status)(wireObject(raw,['status','echoEntryId','rejectionCode','acceptedAtMs']));
+      const names=['unspecified','not_found','accepted','rejected','pending','unknown_durability'],code=enumCode(data.status,'GROK_BOT_SEND_STATUS_',names),status=names[code];
+      const receipt={agent_id:input.bot,message_id:input.message_id,status,status_code:code,echo_entry_id:receiptId(data.echoEntryId??null),rejection_code:receiptId(data.rejectionCode??null,64),accepted_at_ms:data.acceptedAtMs!==undefined&&/^\d{1,20}$/.test(data.acceptedAtMs)?data.acceptedAtMs:null};
+      if(code===2)return {state:'accepted',code:'STATUS_ACCEPTED',receipt};
+      if(code===3)return {state:'rejected',code:'STATUS_REJECTED',receipt};
+    }catch{}
+    return {state:'unknown',code:'STATUS_UNCERTAIN'};
   },
 };
 function inputFor(row:NotificationRecord & {request:string}):NoticeInput {
@@ -85,6 +67,9 @@ export function createNotifier(store:Store,transport:NotificationTransport,onErr
     controller=new AbortController();if(stopped)controller.abort();
     if(pending){
       let result:NoticeResult;try{result=await transport.send(inputFor(row),controller.signal);}catch{result=unknown();}
+      if(result.state==='pending'&&result.code==='RETRY_NOT_DISPATCHED')result=row.attempts>=3
+        ?{state:'not_dispatched',code:'NOT_DISPATCHED'}
+        :{...result,next_attempt_at:Date.now()+250*2**(row.attempts-1)};
       await store.completeNotification(row.event_id,result);
     }else{
       let result:NoticeResult & {state:'accepted'|'rejected'|'unknown'};

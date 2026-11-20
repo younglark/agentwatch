@@ -1,11 +1,12 @@
-# agentwatch task core — external gbc adapters
+# agentwatch task core — built-in Connect/HTTP adapters
 
 This is modular implementation code, not another generic PoC. It is **not yet a
-production runner**. 生产身份门闩通过独立安装的 `gbc`（`npm-v0.7.0`
-契约）执行只读目标查询；本轮仅以 mock gbc 验收，不代表 live 身份验证已通过。
-无可执行 gbc / 无凭据仍返回 `AUTH_NOT_CONFIGURED`（exit 4），不插入任务。
-没有生产 fake-verifier flag / 环境开关；不读取官方 App 凭据，不内嵌 gbc、
-非公开协议、App 二进制、模型 SDK、ACP、webhook 或 Stop Hook。
+production-ready runner**. 身份查询和通知由 agentwatch 内建的 Bun HTTP 客户端直接请求；
+`grokbot-control` npm-v0.7.0 **只作只读协议参考**，不调用外部 `gbc`，不安装/内嵌它、
+官方 App、Node、模型 SDK、ACP、webhook 或 Stop Hook。这里使用的后端契约来自非官方
+逆向资料，不是官方公开 API。本轮只做合成凭据 + 本地 mock Connect 后端验收，没有 live。
+无可用自有凭据 → `AUTH_NOT_CONFIGURED`（exit 4），不插任务、不启动 native 命令。
+没有生产 fake-verifier flag / 环境开关，不读取真实 ~/.gbc、官方桌面凭据或 keychain。
 
 The original root src/ and experiments/bun-daemon-spike remain historical code.
 This package is built independently; it does not replace the legacy root bin yet.
@@ -56,114 +57,99 @@ agentwatch cancel TASK_ID [--state DIR] [--json]
   conflict; 7 IPC auth; 8 local/external lookup transport unavailable; 11 draining; 12 version /
   migration incompatibility. Unknown transport interruptions are not called success.
 
-## 外部 gbc 身份门闩（本轮实现）
+## Agentwatch 自有凭据（登录/刷新命令后置）
 
-1. 操作者先自行独立安装/登录 `grokbot-control` 的 `npm-v0.7.0` 版本，并让
-   Linux daemon 的 PATH 能定位可执行的 `gbc`（及 gbc 所需的 Node 运行时）。
-   `agentwatch` 不安装 gbc、不启动浏览器、不提供 `auth login`，也不接收 token 参数。
-   `gbc` 自己使用其已有凭据存储（默认 `~/.gbc`）；agentwatch 不直接读取它。
-   daemon 继承启动时的 HOME/PATH；已运行 daemon 不会采用后来 shell 的环境更改。
-2. 每个新任务入账前，和实际 native spawn 前，分别执行一次：
-   `gbc --json bot get --agent-id=BOT`。`--bot` 必须是精确 `agent_id`，不是名称或
-   numeric server id；即使 gbc 自身支持 server id，agentwatch 仍核对返回的 agent_id。
-   gbc 的 get 实质是 `ListGrokBotAgents` + 本地筛选，不是独立 GetBot RPC。
-3. 校验 `schema_version:1.0.0` 结果封套、退出码、`known_success`、`code:ok` 与
-   `data.bot.agent_id`。拒绝 `simulated:true`，子进程环境移除 `GBT_MOCK*` 和
-   `GBT_ALLOW_WRITES`；生产 IPC 中伪造 `testOnly` / `verifier:fake` 也无效。
-   PATH 上的 gbc 是操作者信任的外部程序，本门闩不是对恶意同 UID 程序的认证或沙箱。
-4. 缺失/不可执行、gbc auth/unauthenticated → exit 4；另对 exit 9 的合法
-   `known_failure`、非 retryable 封套，精确识别 `auth_revoked`、
-   `auth_refresh_unconfigured`、`auth_refresh_client_mismatch`、
-   `auth_refresh_subject_mismatch` 为 `AUTH_NOT_CONFIGURED` / 4。
-   这是 gbc 保留结构化凭据错误后经 emitResult/mapExitCode 得到的退出码；
-   不把其它 exit 9 或任意 auth 前缀码当鉴权错误。not_found、denied/
-   permission_denied、返回别的 agent_id → `BOT_FORBIDDEN` / 5；unknown outcome
-   （包括列表截断）→ `UNKNOWN` / 10；非 JSON、封套不匹配、其它查询失败、3 秒超时、
-   任一流超出 1 MiB → `TRANSPORT_NOT_CONFIGURED` / 8。所有入账前失败均零任务行。
-   入账后第二次核验失败会保留任务行并标记 failed，绝不启动 native 命令。
-5. gbc 成功从 stdout 解析，失败从 stderr 解析；不原样转发这两路、异常、token 或
-   刷新令到输出/日志，不在 argv 放秘密。stdin 关闭；无 shell 拼接。
-   成功复用 request-id 返回历史任务的幂等语义不变，不会因此重启任务。
-6. 内部 health：可定位 gbc 为 `bot_verifier:gbc`，否则 `not_configured`；
-   这里只反映适配器可用性，不等于凭据有效或 bot 有权限。只有独立 testhost 才报
-   `test_only`。生产 `notification_transport` 同样只反映 gbc 可定位性；testhost 未配置发送。
+本轮只支持安全预配置的有效 access token。**浏览器登录、OAuth refresh、自动迁移、
+真实用户/bot/团队绑定验证均未实现**；不会从 gbc 或官方 App 导入凭据。过期/缺失/不安全
+文件一律 exit 4；不自动登录或重放请求，也不把 client_id 从 JWT、App 或包内常量猜出来。
 
-契约依据：[npm-v0.7.0 README](https://github.com/younglark/grokbot-control/blob/npm-v0.7.0/README.md)、
-`dist/cli/{main,io,config}.js`、`dist/{errors,dto/result,ops/bot}.js`、
-`dist/connect/client.js`、`dist/auth/provider.js`。
-这是用户选定的非官方逆向控制面，**不是官方公开 API**。本轮没有 live 登录、
-OAuth 刷新、真实 bot / 团队绑定或四家 CLI E2E 验证；不因 mock 测试通过而声称已验证。
-通知 transport 的当前实现与界限见下节。二进制只含 agentwatch 本体与现有依赖，
-不打包 gbc/Node；测试的 mock gbc 和 claude 是 `/bin/sh` 内建命令 stand-in，
-PATH 仅含每例私有 mock 目录，无系统工具链泄入。
+默认凭据路径：`~/.agentwatch/auth/credentials.json`；仅 `AGENTWATCH_CREDENTIALS` 可显式
+指定另一份 agentwatch 自有文件。文件须由当前用户持有、普通文件、无 symlink/hardlink、
+权限 0600（或更窄），直接父目录私有 0700（或更窄），路径不经 symlink，最大 16 KiB。
+Windows ACL 尚未实现，Windows 凭据读取失败关闭。它不是对任意同 UID 程序的秘密沙箱。
+凭据加载有界、不回显解析异常；本轮不提供生成/编辑凭据的产品命令。请通过受信任的
+私有配置/安全编辑方式 provision，不把 token 放在 argv 或聊天、日志里。
 
-## 通知：持久 outbox + 外部 gbc（仅 mock 验收）
+agentwatch 独立格式如下（**全部是合成占位符，不是真实凭据**）：
 
-任务终态与稳定 `event_id = task_id:terminal:1` 在同一事务落盘。通知 worker 独立于
-执行 worker；通知失败不改变任务 succeeded/failed/cancelled/unknown，也不改变 wait
-的任务退出语义。status/wait 的 `notification` 显示状态、event_id、message_id、
-attempts、next_attempt_at、reconciliation_attempts、last_code、receipt、
-needs_reconciliation 与 `durability:unverified`。
+```json
+{"version":1,"backend":"https://YOUR-EXPLICIT-BACKEND","client_id":"YOUR-EXPLICIT-CLIENT-ID","access_token":"SYNTHETIC_TOKEN","expires_at_ms":1893456000000}
+```
+
+- `backend` 与 token 同文件绑定，仅 HTTPS origin，无用户信息/路径/query/fragment；
+  本地 mock 仅额外允许 `http://127.0.0.1:PORT` / `[::1]`。不另行猜后端、team id 或覆盖
+  endpoint，不允许重定向。自定义 HTTPS origin 必须由操作者在这份私有配置中显式信任。
+- `client_id` 只来自显式 `AGENTWATCH_CLIENT_ID` 或预配置/未来登录时持久化绑定；两者
+  都有时必须一致。没有内置值，不从 token 解码推导，也不伪造官方身份头。
+  client_id 只做本地绑定校验；RPC 只发送 Bearer，不把 client_id 当认证头发出。
+- `expires_at_ms` 是安全整数且必须晚于现在；本切片不会 refresh。缺失或过期须重新
+  provision 有效凭据；不使用 refresh_token。已运行 daemon 的 env 是启动时快照，文件则
+  每次请求重读。仅改 shell env 须先停止原 daemon 再启动；不会自动替换现有实例。
+- health 读取安全配置是否就绪：`bot_verifier:connect_http`、
+  `notification_transport:connect_http`，否则 `not_configured`。这不证明远端认证或 bot
+  权限有效。`test_only` 仅独立 testhost 使用，生产不会返回它。
+
+## 内建身份门闩与 HTTP 边界
+
+每个新任务入账前、实际 native spawn 前，分别直接 POST：
+`/aiserver.v1.GrokBotService/ListGrokBotAgents`，请求 `{}`。只按 protobuf JSON
+`agents[].agentId` 精确匹配 `--bot`；拒绝 name / numeric server id / legacy alias。
+不传未证实的 team 参数。空完整列表或禁止 → `BOT_FORBIDDEN` / 5；截断列表里未找到
+→ `UNKNOWN` / 10。入账前失败零任务行；入账后第二次失败保留 failed、pid=null，不启动。
+
+Connect unary JSON 没有 CLI `schema_version/outcome` 封套：请求/成功响应是 bare protobuf
+JSON；非 200 的 JSON `code` 错误只用受控码、不回显原始 body。精确 auth 白名单：
+`auth`、`unauthenticated`、`auth_revoked`、`auth_refresh_unconfigured`、
+`auth_refresh_client_mismatch`、`auth_refresh_subject_mismatch` → exit 4；其它失败不泛化
+成鉴权失败。其它坏响应/传输错误 → `TRANSPORT_NOT_CONFIGURED` / 8。
+
+所有 RPC 使用 `Content-Type:application/json`、`Connect-Protocol-Version:1` 与 Bearer；
+3 秒绝对请求/响应读取超时、响应流解码后最大 1 MiB、禁重定向，结束/超限/取消均释放
+响应 reader。不依赖 PATH，不启动网络 CLI，无 token argv，不转发后端异常或原始错误体。
+契约来源与 JSON/枚举映射见 `evidence/direct-http/upstream-contract.md`。
+
+## 通知：持久 outbox + 内建直接请求（仅 mock 验收）
+
+终态与稳定 `event_id = task_id:terminal:1` 同事务落盘；先事务 claim inflight，再发 HTTP。
+首次 claim 生成并持久化 message_id；稳定 ID 只是关联键，**不是已证明的远端去重键**。
+直接 POST 到同一 service：
+
+- `SendGrokBotUserMessage`：`agentId,messageId,sessionId:"",text,sentAtMs`；int64 时间按
+  protobuf JSON 十进制字符串发送。空 sessionId 沿用参考请求的默认未报告会话，不猜 ID。
+- `GetGrokBotSendStatus`：`agentId,messageId,sessionId:""`，仅 unknown 时最多一次只读对账。
+
+text 只有冻结的有界 JSON 六字段：version、event_id、task_id、state、exit_code、error_code。
+不发送 argv、cwd、request_id、日志全文、原始异常、token、report 文件或总结。通知失败
+不改任务结果，wait 只等待任务终结。
 
 | 通知状态 | 只说明什么 |
 |---|---|
-| pending | 未发送；可能无 gbc，或有明确未 dispatch 的可重试证据、正在退避 |
-| inflight | 已持久 claim，外部写可能进行中；不意味着已接受 |
-| accepted | gbc 的已知接受路径／duplicate，或只读 send status 报 accepted；不是已读、持久入箱或任务业务成功 |
-| rejected | 明确 delivery=refused，或只读 send status 报 rejected；不重发 |
-| not_dispatched | 合法 known_failure 明确 rpc_dispatched=false；非重试错误或三次预算已用完 |
-| unknown | 可能已写，必须对账；不能自动重发。needs_reconciliation=true |
+| pending | 尚未请求；缺配置时不 claim；本地明确未 dispatch 的重试可在此退避 |
+| inflight | claim 已落盘，外部写可能进行中 |
+| accepted | delivery=accepted_box/1、accepted_temporal/2、duplicate/3，或只读 status=accepted/2 |
+| rejected | delivery=refused/4，或只读 status=rejected/3，不重发 |
+| not_dispatched | 仅本地可证明未请求的不可重试结果，或本地安全重试预算用尽 |
+| unknown | 可能已写，禁止自动重放；needs_reconciliation=true |
 
-### 发什么、怎么发
+- 超时、崩溃、丢响应、坏 JSON、超限、矛盾或未知枚举一律 unknown；启动恢复 inflight
+  → unknown。只读状态 not_found/pending/unknown_durability、查询失败都不触发补发。
+- **后端错误体的 rpc_dispatched:false / retryable 不再是本地未 dispatch 证据**：HTTP
+  已请求即可能发生副作用，即使 401/503 也不自动重试。当前直接适配器没有自动网络重试，
+  也未实现 token refresh；本地凭据加载失败保留 pending/NOT_CONFIGURED，不丢 outbox。
+- worker 保留本地可证明未 dispatch + 可重试的注入式结果契约；公共 engine/store seam
+  验证最多 3 次总尝试、250/500ms 有界退避，预算/时间落盘，重启不重置。不把这个 DI
+  测试说成 live 刷新重试已实现。生产 HTTP 错误绝不映射到该安全重试结果。
+- accepted/rejected/unknown/not_dispatched 不回到 pending。unknown 最多一次只读 status，
+  尝试数先落盘；没有后续人工覆写/重复对账命令。未读 history/transcript。
+- receipt 只留有界白名单字段，凭据形态/超长标识置 null；不回显 refusal 原文/额外字段。
+  `dispatched` 是业务工作流字段，不是「RPC 没发出」证据。
+- durability 恒 `unverified`。accepted、duplicate、echo、accepted_at 都不是持久 ACK、
+  已读或任务业务成功证明；不承诺 exactly-once。drain 取消当前 HTTP、停止领取并有界
+  落盘，不等无限网络；无凭据 pending 可在配置恢复后继续。
 
-只调用已经核对 `npm-v0.7.0` 的 CLI：
-
-```text
-gbc --json --allow-writes message send --agent-id=BOT --message-id=MESSAGE_ID --text-stdin
-gbc --json message status --agent-id=BOT --message-id=MESSAGE_ID
-```
-
-正文从 stdin 传一行已冻结的有界 JSON：version、event_id、task_id、state、exit_code、
-error_code。error_code 仅本体白名单，正文不含 argv、cwd、request_id、stdout/stderr、
-原始异常、token 或报告文件内容。本轮不采集 AGENTWATCH_REPORT_FILE，不做总结。
-message_id 在首次 claim 事务内生成并持久化；稳定 ID 供关联/对账，不是远端去重证明。
-不传 session-id、不猜默认会话或 team id；gbc 返回的 default_unreported 也不是服务端
-确认的 session ID。发往任务已记录的目标 bot，不新建 bot，不重跑源任务。
-
-接收必须匹配 agent_id/message_id、非 simulated、合法封套/退出码和已核枚举对：
-accepted_box/1、accepted_temporal/2、duplicate/3；refused/4 明确拒绝。
-receipt 只保留 delivery/dispatched/workflow_id 等白名单字段，或 send status 的
-status/status_code/echo_entry_id/rejection_code/accepted_at_ms。过长或明显凭据形态的
-标识符置 null，未截短后冒充原始回执；拒绝原因原文、notes、额外响应字段不回显。
-这不是完整原始 HTTP 回执。dispatched 是消息工作流字段，**不等于 RPC 未发送证据**。
-
-### 重试、崩溃与对账
-
-- 唯一可自动重试路径：失败封套 known_failure、无 data、显式
-  error.details.rpc_dispatched=false、retryable=true、gbc exit 8。最多三次
-  （总尝试数），间隔 250ms/500ms，持久化下一次时间；重启不重置预算。
-- 超时、进程崩溃、响应丢失/坏 JSON、超限、unknown、模拟响应、身份不匹配或可能已
-  dispatch，一律 unknown，不自动重放写。即使 error 自称 retryable 也不能绕过此规则。
-- 发送前先提交 inflight；重启把 inflight 改 unknown。accepted、rejected、unknown、
-  not_dispatched 均不会被当作 pending 重发。旧 delivered 布尔列保留但不复用含义：
-  迁移 002 把旧 0 保留 pending，旧非 0 记 unknown/LEGACY_DELIVERY_UNVERIFIED；
-  没有伪造 message_id 或 accepted。001 checksum 不改，未知迁移仍拒绝。
-- 有 message_id 的 unknown 最多做一次自动只读 message status（持久记录尝试）。
-  accepted/2 或 rejected/3 可更新接受路径分类；not_found、pending、unknown_durability、
-  查询失败/超时/不匹配都仍 unknown，**从不因查不到就补发**。历史布尔标记无 message_id
-  则无法自动查。未抓取 history/transcript，避免无关内容读取和模糊匹配。
-- 自动查询可能早于服务端最终可见性；本轮没有后续手工「重新对账/覆盖结论」命令。
-  status 持续展示未知与稳定 message_id；操作者可独立运行上面的只读 gbc status，
-  但该外部查询不会自动回写本地账本。这是刻意保守的剩余缺口，不是持久 ACK 证明。
-
-gbc 子进程 stdin 关闭，无 shell；每次超时 3 秒、stdout/stderr 各限 1 MiB，异常与
-原始两路输出不转发。drain 停止新领取，杀掉当前 gbc 进程并观察 close、持久化未知，
-不无限等待网络；尚未发送的 pending 保留。没有 gbc 时不 claim，不丢 outbox；以后
-可定位到 gbc 再处理 pending。进程树取消与恶意同 UID 程序仍不是本轮保证。
-
-本轮只在临时 HOME/PATH 的 mock gbc 上验证；没有真实发送、登录、读取真实 ~/.gbc、
-后端请求、OAuth 刷新或四家 E2E。服务端稳定 ID 去重与持久入箱 ACK 仍未证明，
-不承诺 exactly-once，也不把 accepted_box 的名字当持久性证明。
+本轮源码与编译合约均使用本地 loopback Connect mock + 临时 HOME/合成私有凭据；PATH
+只含 native shell fixture（编译测试没有工具链且暂移源码）。没有真实登录、refresh、
+真实后端请求、真实 bot 发信、真实 ~/.gbc/官方凭据读取或四家 CLI E2E。
 
 ## Service and storage boundaries
 
@@ -194,7 +180,7 @@ watchdog and a full contender retry pool are not in this slice.
 
 ## Explicit remaining gates
 
-Live gbc identity/target/send verification, durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
+Live direct identity/target/send verification, browser login and OAuth refresh, durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
 production process-tree cancellation (.cmd / Windows included), redaction policy
 for potentially sensitive native output, disk retention, upgrades/distribution,
 and full multi-user/Windows ACL hardening remain unfinished. No production

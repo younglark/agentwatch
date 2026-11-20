@@ -1,0 +1,13 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: direct Connect lookup error-on-200 is bounded and fail closed [571.74ms]
+(pass) source CLI: agentwatch credentials hardlink never reach HTTP or admission [494.41ms]
+(pass) source CLI: agentwatch credentials symlink-parent never reach HTTP or admission [492.58ms]
+(pass) source CLI: direct notification contradictory-refusal remains unknown without replay across restart [1203.73ms]
+
+ 4 pass
+ 66 filtered out
+ 0 fail
+ 28 expect() calls
+Ran 4 tests across 1 file. [2.89s]

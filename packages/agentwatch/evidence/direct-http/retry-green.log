@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) notification locally proven not dispatched retryable=false preserves fixed budget [233.99ms]
+(pass) notification locally proven not dispatched retryable=true preserves fixed budget [948.57ms]
+
+ 2 pass
+ 19 filtered out
+ 0 fail
+ 18 expect() calls
+Ran 2 tests across 1 file. [1286.00ms]

@@ -1,0 +1,10 @@
+{
+  "time_asia_shanghai": "2026-11-20 21:18:05 CST",
+  "live_task_fixture_processes": [],
+  "source_restored": true,
+  "compiled_hidden_source_absent": true,
+  "notes": [
+    "No real backend, credentials, login or send used.",
+    "Spike hard-crash cleanup is explicitly a safety rescue, not stop-success evidence; see spike log."
+  ]
+}

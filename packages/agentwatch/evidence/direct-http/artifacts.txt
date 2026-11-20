@@ -1,0 +1,4 @@
+e412944e8b3bc1ef7948e6118e1e7be43a61b9bf4bc2c9f21fb656bf7795e094  packages/agentwatch/dist/agentwatch
+268fd728bee8cffe8b55e66c4cfe1cfa0ad45d5f86fcdd99cc329e86476d507c  packages/agentwatch/dist/test-host
+packages/agentwatch/dist/agentwatch 109959344 bytes
+packages/agentwatch/dist/test-host 109648048 bytes

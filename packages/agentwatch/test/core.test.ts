@@ -266,3 +266,20 @@ test('notification migration preserves legacy pending and never invents durable 
     await db.close();db=await openStorage(state);expect(await db.store.outbox()).toEqual(rows);
   }finally{await db?.close();rmSync(state,{recursive:true,force:true});}
 });
+
+// The engine seam is where deterministic local pre-dispatch failures are injected.
+// HTTP errors, including a server's rpc_dispatched:false, never produce this result.
+for(const retryable of [false,true])test(`notification locally proven not dispatched retryable=${retryable} preserves fixed budget`,async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-notice-budget-')),db=await openStorage(state),attempts:{id:string;at:number}[]=[];
+  const engine=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:fixtureExecutor,notifications:{available:()=>true,send:async(input)=>{
+    const claimed=await db.store.notification(JSON.parse(input.body).task_id);expect(claimed?.state).toBe('inflight');expect(claimed?.attempts).toBe(attempts.length+1);
+    attempts.push({id:input.message_id,at:Date.now()});return retryable?{state:'pending',code:'RETRY_NOT_DISPATCHED'}:{state:'not_dispatched',code:'NOT_DISPATCHED'};
+  }}});
+  try{
+    const task=await engine.run({request_id:'budget-'+retryable,bot:'test-bot',cwd:state,argv:['claude']});await engine.wait(task.id,5000);
+    const end=Date.now()+2500;let result=await engine.status(task.id);
+    while(result.notification.state!=='not_dispatched'&&Date.now()<end){await new Promise(r=>setTimeout(r,25));result=await engine.status(task.id);}
+    expect(result.state).toBe('succeeded');expect(result.notification).toMatchObject({state:'not_dispatched',attempts:retryable?3:1,durability:'unverified'});expect(attempts).toHaveLength(retryable?3:1);expect(new Set(attempts.map(a=>a.id)).size).toBe(1);
+    if(retryable){expect(attempts[1]!.at-attempts[0]!.at).toBeGreaterThanOrEqual(250);expect(attempts[2]!.at-attempts[1]!.at).toBeGreaterThanOrEqual(500);}
+  }finally{await engine.close();await db.close();rmSync(state,{recursive:true,force:true});}
+});

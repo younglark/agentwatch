@@ -1,0 +1,5 @@
+2026-11-20 21:17:34 CST
+1.4.4
+Linux 6.12.113+ x86_64 GNU/Linux
+feat/bun-task-core
+c378e8fa4921bf2f544229aa27cfd9116c1074af

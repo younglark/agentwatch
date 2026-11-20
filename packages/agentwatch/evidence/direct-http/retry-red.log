@@ -1,0 +1,40 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) notification locally proven not dispatched retryable=false preserves fixed budget [234.05ms]
+277 |   }}});
+278 |   try{
+279 |     const task=await engine.run({request_id:'budget-'+retryable,bot:'test-bot',cwd:state,argv:['claude']});await engine.wait(task.id,5000);
+280 |     const end=Date.now()+2500;let result=await engine.status(task.id);
+281 |     while(result.notification.state!=='not_dispatched'&&Date.now()<end){await new Promise(r=>setTimeout(r,25));result=await engine.status(task.id);}
+282 |     expect(result.state).toBe('succeeded');expect(result.notification).toMatchObject({state:'not_dispatched',attempts:retryable?3:1,durability:'unverified'});expect(attempts).toHaveLength(retryable?3:1);expect(new Set(attempts.map(a=>a.id)).size).toBe(1);
+                                                                             ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "attempts": 3,
++   "attempts": 165,
+    "durability": "unverified",
+-   "state": "not_dispatched",
++   "event_id": "0a73ab82-f3d4-4fc6-99ac-413eb16e05f2:terminal:1",
++   "last_code": "RETRY_NOT_DISPATCHED",
++   "message_id": "5469a4ad-873a-48a9-830a-e9813c5745c5",
++   "needs_reconciliation": false,
++   "next_attempt_at": 0,
++   "receipt": null,
++   "reconciliation_attempts": 0,
++   "state": "pending",
++   "transport": "connect_http",
+  }
+
+- Expected  - 2
++ Received  + 10
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:282:72)
+(fail) notification locally proven not dispatched retryable=true preserves fixed budget [2695.41ms]
+
+ 1 pass
+ 19 filtered out
+ 1 fail
+ 338 expect() calls
+Ran 2 tests across 1 file. [3.03s]

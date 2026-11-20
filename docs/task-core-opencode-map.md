@@ -1,5 +1,7 @@
 # 首批 task-core 切片：OpenCode v2 源码映射与任务
 
+**当前差异以末尾 t185 章节为准；以下首批和 t183 外部 CLI 路线保留为历史。**
+
 日期：2026-11-20，Asia/Shanghai。依据当前完整实施计划 Page
 21811694-d2c2-469b-bd34-9bb2ffc50219；不是增加通用 PoC，也不重开
 Bun / 四家普通 CLI / 通知实测搁置等决定。新实现位于 packages/agentwatch，
@@ -89,3 +91,33 @@ inflight / accepted / rejected / not_dispatched / unknown，原 delivered 列不
 message status 对账。drain abort 并观察有界子进程退出。通知结果不覆盖任务终态。
 这是 agentwatch 的差异，不是新增通用 PoC；没有引入 gbc/proto/App 运行依赖，
 没有真实发送或凭据访问。ACK/去重仍未证明；当前细节以正式包 README/RESULTS 为准。
+
+## t185：内建直接 Connect/HTTP（当前，2026-11-20，Asia/Shanghai）
+
+用户纠正外部 CLI 路线：grokbot-control 只作协议/行为参考，不是运行依赖。
+移除 gbc-verifier 和所有生产 execFile/gbc PATH 查询；新 connect-client 是共享的
+有界 HTTP/凭据加载深模块，connect-verifier 和 notification transport 只承担领域映射。
+不重做 OpenCode session/PTY/runtime，也不复制整个参考 SDK/proto 包。
+
+- OpenCode 的 Schema 边界、可控资源生命周期与错误白名单继续沿用已有模块方式；本次差异
+  是外部进程 timeout/maxBuffer/kill 转成 HTTP absolute timeout/流读取上限/AbortSignal。
+  每个 RPC 3s、响应解码后 1MiB，禁 redirect，reader finally 取消/释放；drain 可取消发送和只读对账。
+- RPC 固定为 ListGrokBotAgents、SendGrokBotUserMessage、GetGrokBotSendStatus。
+  使用 Connect unary bare protobuf JSON，不把参考 CLI 的 schema_version/outcome 当 HTTP 协议。
+  仅 List + 精确 agentId 验证，不猜 team；不读 history/transcript。
+- 新私有凭据路径/格式属于 agentwatch；0700 父目录、0600 单链接普通文件、当前 owner、
+  no-follow + 同 descriptor 有界读，拒绝 symlink 路径。backend 显式绑定，client_id 无内置/猜测，
+  只环境或持久绑定；Windows ACL 未做而失败关闭。无读取 ~/.gbc 或官方桌面凭据代码。
+- 不混淆两个 dispatch：HTTP 已调用后，即使后端自称 rpc_dispatched:false/retryable 也不能
+  证明没副作用，因此 unknown/不重试；业务 dispatched 字段也不提供该证据。仅本地明确
+  未请求 + 可重试 DI 结果可进入公共 worker 的三次/250ms/500ms 预算；当前生产适配器
+  未实现 refresh 或本地瞬态重试源，缺凭据保留 pending，不伪造功能。
+- 保留 claim-before-send、终态/outbox 原子性、inflight 重启 unknown、最多一次只读对账、
+  durability unverified、通知失败不改变任务结果。无新迁移、无状态语义回退。
+- 测试继续仅约定 command-contracts/compiled、core engine/store seams；主路径改为本地
+  HTTP mock + 合成私有凭据，编译测试无工具链和源码，已不依赖 mock gbc 可执行文件。
+  唯一 gbc shell 陷阱仅证明即便 PATH 有 gbc 也不会调用，不承担主路径。
+
+参考 tag npm-v0.7.0 = 097ed4fd107d1d7a92ef10f37b44b104edea1d70 的具体文件、
+JSON 编码与未证实边界见 packages/agentwatch/evidence/direct-http/upstream-contract.md。
+数量/完整验收日志见 RESULTS。本轮无真实后端、登录、refresh 或发送；独立复审仍待主线程。

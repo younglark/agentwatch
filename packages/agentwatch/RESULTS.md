@@ -1,4 +1,83 @@
-# t183 后续：外部 gbc 通知 transport 与持久状态 — current
+# t185：内建直接 Connect/HTTP — current
+
+2026-11-20，Asia/Shanghai。固定基线 `c378e8f`；用户明确纠正 gbc 仅作参考。
+本节和 README 为当前边界；以下所有 t183 外部 CLI 章节只保留历史证据。
+
+## 结果与保持的语义
+
+- 删除 `gbc-verifier.ts`，没有生产 `execFile`/`Bun.which('gbc')`/SDK 运行依赖；新
+  `connect-client.ts` 共用有界 HTTP/安全自有凭据加载，`connect-verifier.ts` 负责精确
+  bot 权限映射，notifications 改直接请求，不改原有任务/outbox 事务与状态迁移。
+- 直接 POST `aiserver.v1.GrokBotService/{ListGrokBotAgents,SendGrokBotUserMessage,
+  GetGrokBotSendStatus}`。使用 Connect unary JSON 和 Schema 校验，而不是 CLI 结果封套。
+  protobuf int64 为十进制字符串，枚举从固定参考 schema 映射；不猜 team/session/client id。
+- 身份查询仍在入账前/启动前两次执行，精确 agentId 匹配；六个结构化 auth 码和本地缺
+  配置映射4、禁止/完整列表缺失5、截断缺失10、其它坏响应/传输8。不存在生产 fake bypass。
+- 自有默认 `~/.agentwatch/auth/credentials.json`，或显式 `AGENTWATCH_CREDENTIALS`；
+  version/backend/access_token/expires_at_ms + client_id。client_id 只文件绑定或显式
+  `AGENTWATCH_CLIENT_ID`，冲突拒绝。未内置/推导值，未导入旧凭据。
+  文件/目录 owner+私有权限、单链接、无 symlink（含祖先）、no-follow、同 fd 有界16KiB读取；
+  HTTPS origin 绑定，只有 numeric loopback mock 允许 HTTP；Windows ACL 未实现则失败关闭。
+- 3s绝对请求/响应读取超时、流读取1MiB上限、禁redirect、reader finally取消/释放、AbortSignal
+  贯穿发送/对账/drain。秘密只在私有文件与 Authorization 内，不进 argv/诊断，不回显后端body。
+- 通知继续先持久claim inflight；终态不被通知结果污染；崩溃inflight→unknown、可能已dispatch
+  不重放、unknown最多一次先持久登记的只读status、durability恒unverified。六字段冻结正文
+  不含日志/argv/cwd/token/request_id/report；receipt只有有界白名单。
+- 必须区分旧CLI的**本地**预请求证据和现在的**远端**错误体：HTTP发出后，即使对端自称
+  rpc_dispatched:false/retryable，也维持unknown，不自动重放。公共worker保留可注入的本地
+  明确未dispatch+可重试结果，三次总预算和250/500ms退避落盘，engine/store seam验证。
+  当前生产直接适配器没有refresh/本地瞬态重试源，不伪称网络安全重试已实现；本地凭据失效
+  保留pending/NOT_CONFIGURED。无凭据时available=false，不领取、不丢outbox。
+- health/通知transport用 `connect_http` 或 `not_configured`；生产不再报gbc/test_only。
+
+## TDD / 回归证据
+
+只用既定公共 command-contracts / compiled 及 core engine/store seams：
+
+- lookup-red/green：有安全合成凭据和本地HTTP、PATH没有gbc，旧实现4→直接查询放行。
+- notification-red/green：直接接受回执、冻结请求字段、稳定message_id/重启不重发。
+- retry-red/green：移除外部CLI后，有证据的本地DI重试预算从无界pending红到三次退避绿；
+  非重试结果一次终结。初次测试超时不作为最终red，重跑后用实际pending/预算断言失败证据。
+- hardening-red/green：hardlink/祖先symlink、200里伪错误封套、accepted与refusal矛盾先红后绿。
+  硬化测试green后曾出现TS平台分支收窄错误，最终简化POSIX检查后完整typecheck通过；
+  中间失败不作为正式通过证据。
+- 更广矩阵：六种auth码在入账前/启动前、别名拒绝、列表截断、坏JSON/错类型/未知枚举、
+  超时/超限/redirect、401/503与伪未dispatch/矛盾/CLI封套、credential在两处丢失、
+  crash-inflight、只读接受/拒绝/未决/未知持久性、查询失败只一次、发送/查询drain取消、
+  无凭据pending跨重启和恢复、回执秘密形态过滤。旧核心/迁移/取消/日志契约保留。
+- 主夹具是父测试进程中的真实loopback HTTP服务和合成私有文件，不是mock gbc；
+  compiled复制二进制、隔离HOME/PATH/cwd并暂移源码，只保留native /bin/sh fixture。
+  一个故意失败的gbc PATH陷阱仅用于证明它不会被调用。
+
+正式完整 `bun run verify` **exit 0**（含typecheck、源码、重建两产物、编译验收）；
+原spike独立完整 `bun run verify` **exit 0**，两包typecheck均通过：
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---:|---:|---:|
+| 正式源码 | 101 / 0 | 685 | 88.44s |
+| 正式编译 | 78 / 0 | 580 | 37.07s |
+| spike源码 | 11 / 0 | 194 | 28.41s |
+| spike编译 | 11 / 0 | 193 | 10.46s |
+
+日志、固定参考契约、环境、二进制SHA256/大小均在 `evidence/direct-http/`。
+Bun1.4.4；生产产物109,959,344 bytes，test-host109,648,048 bytes。
+cleanup-audit显示无本轮存活fixture/daemon进程，源码已复原；spike hard-crash测试的
+safety cleanup如实记录在日志，不冒充正常停止成功。没有改迁移SQL/checksum或依赖清单。
+
+## 未做 / 不得声称
+
+没有真实后端请求、真实登录、真实发送、真实 ~/.gbc/官方App/keychain凭据读取，未live
+验证JSON端点兼容性、token刷新、bot/团队绑定、四家CLI E2E。浏览器登录/refresh命令本轮
+明确后置，当前仅能使用安全预配置有效token；过期失败关闭，不提供静默导入/刷新。
+不声称远端去重、持久入箱ACK、已读或业务成功；稳定本地ID和accepted/duplicate不证明这些。
+Windows ACL、跨平台/进程树取消、日志保留/脱敏、发行升级和人工再次对账UX仍未完成。
+只完成自审与机械验收，尚待父代理独立复审；不push/PR/merge/发布。
+尝试本地commit时因仓库未配置author identity失败；未猜测/更改身份，全部改动已stage，
+HEAD仍是c378e8fa4921bf2f544229aa27cfd9116c1074af，请用cached diff复审。
+
+---
+
+# t183 后续：外部 gbc 通知 transport 与持久状态 — historical
 
 2026-11-20，Asia/Shanghai。固定基线 `a9cb935f2a67e659f5f5cc93845fcc4227ee6eb6`。
 身份适配已独立审查后继续本切片。只实现/测试外部 CLI 通知与本地状态，没有真实发送。

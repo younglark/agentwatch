@@ -15,5 +15,5 @@ beforeAll(()=>{
 });
 afterAll(()=>{if(existsSync(hidden)&&!existsSync(source))renameSync(hidden,source);rmSync(root,{recursive:true,force:true});});
 // Harness creates per-case HOME and a PATH containing only its initially empty mock dir.
-// Shared contracts add executable mock gbc/claude only; /bin/sh builtins need no toolchain.
+// Shared contracts use loopback HTTP + synthetic credentials; only native claude is executable.
 commandContracts('compiled CLI isolated-PATH',[cli],[host],{PATH:empty,HOME:root,LANG:'C.UTF-8'});

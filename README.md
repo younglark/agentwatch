@@ -2,7 +2,7 @@
 
 > **新架构首批实现：** 见 [packages/agentwatch](packages/agentwatch/README.md) 和
 > [OpenCode v2 源码实施映射](docs/task-core-opencode-map.md)。Bun 任务核心与五命令
-> 已独立实现；生产 bot verifier 现通过外部 `gbc` 做精确 agent_id 核验（本轮仅 mock 验收，未 live 验证）。无 gbc/凭据仍拒绝启动；外部通知 transport 已做 mock 验收，未证明持久 ACK 或远端去重。本文件下面
+> 已独立实现；身份查询与终态通知现由内建 Connect/HTTP 客户端直接请求，`grokbot-control` 仅协议参考，无 `gbc` 运行依赖。只做合成凭据/本地 mock 验收；缺自有凭据拒绝启动，浏览器登录/刷新后置，未 live 验证、未证明持久 ACK 或远端去重。本文件下面
 > 是旧 auth/RPC PoC 的历史说明；不是新架构的生产入口。
 
 

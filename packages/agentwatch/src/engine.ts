@@ -18,7 +18,7 @@ export async function createTaskEngine(options:EngineOptions) {
   const children=new Map<string,Child>(),submissions=new Set<Promise<unknown>>();
   async function view(task:TaskRecord) {
     const notice=terminal(task.state)?await store.notification(task.id):undefined;
-    return {...publicTask(task),notification:{state:notice?.state??'not_ready',transport:options.notifications?.available()?'gbc':'not_configured',event_id:notice?.event_id??null,message_id:notice?.message_id??null,attempts:notice?.attempts??0,next_attempt_at:notice?.next_attempt_at??0,reconciliation_attempts:notice?.reconcile_attempts??0,last_code:notice?.last_code??null,needs_reconciliation:notice?.state==='unknown',durability:'unverified',receipt:notice?.receipt?JSON.parse(notice.receipt):null}};
+    return {...publicTask(task),notification:{state:notice?.state??'not_ready',transport:options.notifications?.available()?'connect_http':'not_configured',event_id:notice?.event_id??null,message_id:notice?.message_id??null,attempts:notice?.attempts??0,next_attempt_at:notice?.next_attempt_at??0,reconciliation_attempts:notice?.reconcile_attempts??0,last_code:notice?.last_code??null,needs_reconciliation:notice?.state==='unknown',durability:'unverified',receipt:notice?.receipt?JSON.parse(notice.receipt):null}};
   }
   async function work() {
     const task=(await store.queue())[0];if(!task||!accepting)return;
