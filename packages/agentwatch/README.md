@@ -99,6 +99,11 @@ fstat (regular, current owner, private, single link). Reads use that same descri
 for size/data; append writers share the same guard. Path replacement cannot
 redirect an already pinned open. Bounded allocation happens before acquiring the
 read descriptor, and all acquired descriptors have exception-safe cleanup.
+Failed inode/path validation uses a keep flag and finally to close the file
+descriptor; a closeSync failure is swallowed separately so it cannot replace the
+IPC_AUTH mapping or skip that close attempt. A kernel close that does not
+release the descriptor is not retried and is not claimed leak-free. The
+directory descriptor remains in its existing finally.
 
 This specific guarantee requires Linux O_NOFOLLOW/O_DIRECTORY and procfs; other
 platforms fail closed for log access, with no insecure fallback and no new native

@@ -64,3 +64,7 @@ OpenCode 就把未实现项或未测平台标成通过。
   不是仅凭 fixture receipts 判断。错误码复用 domain 自有键，不使用原型链 `in`。
 - 本轮只修 5 项已报告发现；取消/等待/unknown/outbox 既有契约保留，未增加产品命令或真实集成。
   独立 Standards/Spec 复审待主线程；本 executor 仅完成自审与机械回归。
+
+## t179 清理
+
+仅处理审查提出的两项资源清理：失败路径文件 fd 用 keep+finally 关闭（关闭失败单独吞掉再映射 IPC_AUTH），以及目录替换测试的路径复原与 close/rm 分层。不改变既有任务/IPC 契约，也不新增平台 PoC。准确证据见 packages/agentwatch/RESULTS.md 与 evidence/review-cleanup/。

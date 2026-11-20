@@ -1,5 +1,5 @@
 import { test, expect, spyOn } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openStorage } from '../src/storage.ts';
@@ -179,6 +179,11 @@ test('spawn log writers reject stdout and stderr symlinks without touching owned
   }finally{rmSync(state,{recursive:true,force:true});}
 });
 
+
+async function restoreThenDispose(restore:()=>void,engine:Awaited<ReturnType<typeof createTaskEngine>>,db:Awaited<ReturnType<typeof openStorage>>,root:string) {
+  try {restore();}
+  finally {await engine.close();await db.close();rmSync(root,{recursive:true,force:true});}
+}
 import * as fs from 'node:fs';
 test('log directory replacement at open cannot redirect a pinned log read',async()=>{
   const root=mkdtempSync(join(tmpdir(),'aw-log-race-')),state=join(root,'state'),pinned=join(root,'pinned'),outside=join(root,'outside');
@@ -192,7 +197,7 @@ test('log directory replacement at open cannot redirect a pinned log read',async
     return (open as any)(path,...args);
   }) as any);
   try{expect((await engine.logs(task.id)).text).toBe('OWNED_LOG');expect(swapped).toBe(true);}
-  finally{fault.mockRestore();if(swapped){unlinkSync(state);fs.renameSync(pinned,state);}await engine.close();await db.close();rmSync(root,{recursive:true,force:true});}
+  finally{fault.mockRestore();await restoreThenDispose(()=>{if(swapped){unlinkSync(state);fs.renameSync(pinned,state);}},engine,db,root);}
 });
 
 test('drain rejects a verifier-pending submission before admission without a ledger row',async()=>{
@@ -206,4 +211,37 @@ test('drain rejects a verifier-pending submission before admission without a led
     expect((await outcome).error).toMatchObject({code:'DRAINING'});await stopping;
     expect(await db.store.lookup(input)).toBeUndefined();expect(launches).toBe(0);
   }finally{barrier.release();await engine.close();await db.close();rmSync(state,{recursive:true,force:true});}
+});
+
+test('inode validation maps IPC_AUTH, does not leak, and swallows a later closeSync throw',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-close-fail-')),db=await openStorage(state);
+  const engine=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:fixtureExecutor});
+  await engine.drain();
+  const task=await db.store.submit({request_id:'close-throws',bot:'test',cwd:state,argv:['claude']});
+  const file=join(state,task.id+'.stdout');writeFileSync(file,'OWNED_LOG',{mode:0o644});
+  const descriptors=()=>readdirSync('/proc/self/fd').filter(fd=>{try{return readlinkSync('/proc/self/fd/'+fd)===file;}catch{return false;}}).map(Number);
+  const before=descriptors(),realClose=fs.closeSync,injected=new Error('injected close failure');
+  let attempts=0;
+  const closing=spyOn(fs,'closeSync').mockImplementation(((fd:number)=>{
+    let target='';try{target=readlinkSync('/proc/self/fd/'+fd);}catch{return realClose(fd);}
+    if(target===file){attempts++;realClose(fd);throw injected;}
+    return realClose(fd);
+  }) as any);
+  try {
+    await expect(engine.logs(task.id)).rejects.toMatchObject({code:'IPC_AUTH'});
+    expect(attempts).toBeGreaterThan(0);
+    expect(descriptors()).toEqual(before);
+  }finally{closing.mockRestore();for(const fd of descriptors())if(!before.includes(fd))closeSync(fd);await engine.close();await db.close();rmSync(state,{recursive:true,force:true});}
+});
+
+test('directory-swap cleanup still disposes engine, store and temp dir if path restore throws',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'aw-cleanup-skip-')),state=join(root,'state');mkdirSync(state,{mode:0o700});
+  const db=await openStorage(state),engine=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:fixtureExecutor});
+  try {
+    await expect(restoreThenDispose(()=>{throw new Error('injected path restore failure');},engine,db,root)).rejects.toThrow('injected path restore failure');
+    expect(existsSync(root)).toBe(false);
+  }catch(error){
+    await engine.close().catch(()=>{});await db.close().catch(()=>{});rmSync(root,{recursive:true,force:true});
+    throw error;
+  }
 });

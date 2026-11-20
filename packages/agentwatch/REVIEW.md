@@ -1,3 +1,36 @@
+# t179 local self-review — independent parent review pending
+
+Fixed base 43b8c5b7d8fb2a077b99cc10795a4632b108c05e. Spec is the two Standards
+cleanup suggestions authorized by t179 “继续”. Re-read log-files.ts:30-36 and
+the directory-swap test finally; both findings were valid, none dismissed.
+Previously closed t178 contracts were not reopened. No repository
+AGENTS/CONTRIBUTING/CODING_STANDARDS were added.
+
+## Standards
+
+Failure-path file descriptors are now closed in finally with a keep flag.
+closeSync errors are swallowed only in that failure-path close, so they cannot
+mask the mapped IPC_AUTH error or skip the close attempt. Directory close stays
+in the existing finally, as requested. The directory-swap test restores paths
+in try and always disposes engine, store, and the temporary tree in finally.
+A typo from a mechanical import edit (`unlinkSync,existsSync(file)`) was caught
+by typecheck before the official verify and restored to `unlinkSync(file)`.
+
+## Spec
+
+No requested product behavior changed. The first red proof used a closeSync
+throw that did not release the fd (leak of fd 11). The requested fix is a
+single finally close, not a retry, so the kept regression asserts the
+achievable contract: validation still maps IPC_AUTH, a successful close leaves
+no descriptor, and a closeSync throw after release is swallowed. This is not a
+claim that a failed close(2) cannot leak. The restore-throw test proves
+dispose is no longer skipped. Production run stays AUTH_NOT_CONFIGURED.
+
+This is a self-review, not an independent two-axis verdict. Parent review is
+required before acceptance. Measured counts and evidence are in RESULTS.md.
+
+---
+
 # t178 local self-review — independent parent review pending
 
 Fixed base cb8fa40330dfdbddbfb028901e46d90a957ef729. Spec is the five findings

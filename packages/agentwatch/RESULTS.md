@@ -1,3 +1,43 @@
+# t179 cleanup results — current
+
+2026-11-20, Asia/Shanghai. Fixed base: `43b8c5b7d8fb2a077b99cc10795a4632b108c05e`.
+Scope is only the two low-risk Standards cleanup suggestions. Previously closed
+t178 findings and contracts are unchanged. Historical measurements follow below.
+
+| Finding | Resolution and evidence in `evidence/review-cleanup/` |
+|---|---|
+| File fd leak if closeSync throws during inode rejection | `cleanup-red.log`: after a rejected 0644 inode check, injecting a first closeSync throw that does not release left fd 11 open (`expect([]).toEqual` failed; received `[11]`), exit 1. Implementation now uses a keep flag and finally to close the failure-path fd, swallowing close errors separately, then maps `CoreError('IPC_AUTH')`. Kept regression `inode validation maps IPC_AUTH, does not leak, and swallows a later closeSync throw` asserts no leftover descriptor and that a closeSync throw after a successful release still surfaces IPC_AUTH, never the raw close error. A close(2) that fails without releasing is not retried and is not claimed leak-free. `cleanup-green.log` exit 0. |
+| Swap-test finally skipped engine/db/temp cleanup if path restore threw | `cleanup-red.log`: injected path-restore throw left the temporary root in place (`existsSync(root)` true), exit 1. Test helper `restoreThenDispose` now does restore in try and engine.close/db.close/rmSync in finally. The directory-swap test uses that helper after mockRestore. The new test proves the restore error still propagates and the tree is gone. `cleanup-green.log` exit 0. |
+
+## Full final verification
+
+Reproduce unchanged: `bun install --frozen-lockfile && bun run verify` in this package.
+Formal `bun run verify` and original experiment `bun run verify` both exit **0**.
+
+| Actual suite | Pass/fail | Assertions | Time |
+|---|---|---|---|
+| Formal source | 29 / 0 | 170 | 10.33s |
+| Formal compiled | 9 / 0 | 86 | 3.92s |
+| Original experiment source | 11 / 0 | 194 | 25.72s |
+| Original experiment compiled | 11 / 0 | 194 | 9.54s |
+
+Formal and experiment typechecks pass. Production bundle: 400 modules, 63ms;
+compile: 730ms; **109,942,960 bytes**. Separate test host: 350 modules, 36ms
+bundle / 456ms compile; **109,631,664 bytes**. Exact tools and hashes:
+`evidence/review-cleanup/environment.txt`. Compiled tests retain empty PATH,
+isolated HOME/cwd, and temporarily moved source/migration resources. Controller
+still uses installed Bun; this is Linux x86_64 + procfs evidence, not a clean
+VM or another platform claim.
+
+Logs: `evidence/review-cleanup/{verify,spike-regression,cleanup-red,cleanup-green}.log`.
+Production run remains AUTH_NOT_CONFIGURED, with no fake flag/env bypass. No
+real Agent/model/notification/identity integration or user machine was touched.
+No new dependency or generic PoC; no push/PR/merge/release/history rewrite.
+Independent parent review is still required. Remaining production gates below
+are unchanged. Owned-process audit: `evidence/review-cleanup/cleanup-audit.json`.
+
+---
+
 # t178 review-fix results — current
 
 2026-11-20, Asia/Shanghai. Fixed base: `cb8fa40330dfdbddbfb028901e46d90a957ef729`.

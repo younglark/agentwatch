@@ -1,0 +1,69 @@
+$ bun run typecheck && bun run test && bun run build && bun run build:test-host && bun test test/compiled.test.ts
+$ bun node_modules/typescript/bin/tsc6 --noEmit
+$ bun test test/core.test.ts test/cli.test.ts
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [43.95ms]
+(pass) core executes fixture once, preserves argv, and wait timeout never cancels [195.76ms]
+(pass) cancel at deterministic beforeClaim barrier prevents any process launch [12.01ms]
+(pass) cancel at deterministic beforeLaunch barrier prevents any process launch [9.92ms]
+(pass) recover lost supervision as unknown without replay; drain ignores historical unknown [8.82ms]
+(pass) authorization is checked again before launch; revocation never starts a child [26.58ms]
+(pass) log reads enforce byte offsets/default and maximum bounds [180.53ms]
+(pass) outbox insertion failure rolls back terminal state [11.74ms]
+(pass) future migration versions fail closed rather than rewriting schema [7.09ms]
+(pass) spawn ENOENT is failed with no PID, not an ambiguous running task [40.79ms]
+ADMISSION_DRAIN_NO_LATE_LAUNCH
+(pass) drain settles admitted submit commit and leaves no queued task to launch after restart [179.00ms]
+(pass) log buffer allocation failure does not leave an opened descriptor [11.36ms]
+(pass) logs reject symlink/nonregular files and traversal IDs from a tampered ledger [8.78ms]
+(pass) spawn log writers reject stdout and stderr symlinks without touching owned sentinel [0.71ms]
+(pass) log directory replacement at open cannot redirect a pinned log read [8.49ms]
+(pass) drain rejects a verifier-pending submission before admission without a ledger row [11.84ms]
+(pass) inode validation maps IPC_AUTH, does not leak, and swallows a later closeSync throw [6.15ms]
+(pass) directory-swap cleanup still disposes engine, store and temp dir if path restore throws [3.87ms]
+
+test/cli.test.ts:
+(pass) authenticated loopback protocol isolates states and runs a fixture through the real ledger [195.44ms]
+(pass) source CLI: five JSON commands preserve native argv and timeout never cancels [2167.61ms]
+(pass) source CLI: concurrent same ID returns one fixture process; changed argv conflicts [935.09ms]
+(pass) source CLI: unconfigured production verifier is visible and cannot be bypassed [984.99ms]
+(pass) source CLI: bot denial, program allowlist and malformed requests fail without stdout or spawn [794.67ms]
+(pass) source CLI: IPC log reads reject replaced links, nonregular files and ledger traversal [1658.54ms]
+(pass) source CLI: private registration rejects wrong credentials/scope and unsafe permissions [190.29ms]
+(pass) source CLI: crash releases ownership, recovers unknown without replay and does not block drain [1249.22ms]
+FORMAL_SHUTDOWN_EXIT_OBSERVED_BEFORE_CLEANUP
+(pass) source CLI: authenticated shutdown drains its fixture and exits before cleanup rescue [527.69ms]
+(pass) source CLI: concurrent production CLI ensure elects one compatible daemon [747.90ms]
+(pass) local protocol accepts only own domain error codes and rejects prototype names [5.47ms]
+
+ 29 pass
+ 0 fail
+ 170 expect() calls
+Ran 29 tests across 2 files. [10.33s]
+$ bun build --compile --define AGENTWATCH_COMPILED=true src/main.ts --outfile dist/agentwatch
+  [63ms]  bundle  400 modules
+ [730ms] compile  dist/agentwatch
+$ bun build --compile --define TEST_HOST_COMPILED=true test/host.ts --outfile dist/test-host
+  [36ms]  bundle  350 modules
+ [456ms] compile  dist/test-host
+bun test v1.4.4 (38afee6c8)
+
+test/compiled.test.ts:
+(pass) compiled CLI empty-PATH: five JSON commands preserve native argv and timeout never cancels [600.31ms]
+(pass) compiled CLI empty-PATH: concurrent same ID returns one fixture process; changed argv conflicts [427.10ms]
+(pass) compiled CLI empty-PATH: unconfigured production verifier is visible and cannot be bypassed [321.14ms]
+(pass) compiled CLI empty-PATH: bot denial, program allowlist and malformed requests fail without stdout or spawn [342.77ms]
+(pass) compiled CLI empty-PATH: IPC log reads reject replaced links, nonregular files and ledger traversal [659.04ms]
+(pass) compiled CLI empty-PATH: private registration rejects wrong credentials/scope and unsafe permissions [108.19ms]
+(pass) compiled CLI empty-PATH: crash releases ownership, recovers unknown without replay and does not block drain [550.37ms]
+FORMAL_SHUTDOWN_EXIT_OBSERVED_BEFORE_CLEANUP
+(pass) compiled CLI empty-PATH: authenticated shutdown drains its fixture and exits before cleanup rescue [360.88ms]
+(pass) compiled CLI empty-PATH: concurrent production CLI ensure elects one compatible daemon [295.89ms]
+
+ 9 pass
+ 0 fail
+ 86 expect() calls
+Ran 9 tests across 1 file. [3.92s]
+exit_code=0

@@ -1,0 +1,12 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+(pass) inode validation maps IPC_AUTH, does not leak, and swallows a later closeSync throw [36.03ms]
+(pass) directory-swap cleanup still disposes engine, store and temp dir if path restore throws [9.91ms]
+
+ 2 pass
+ 16 filtered out
+ 0 fail
+ 5 expect() calls
+Ran 2 tests across 1 file. [175.00ms]
+exit_code=0

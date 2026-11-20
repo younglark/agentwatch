@@ -1,0 +1,11 @@
+Recorded Asia/Shanghai: 2026-11-20T20:04:46+08:00
+Base: 43b8c5b7d8fb2a077b99cc10795a4632b108c05e
+OS: Linux 6.12.113+ x86_64 GNU/Linux
+Bun: 1.4.4
+Compiler: Version 6.0.3
+
+Artifacts
+dist/agentwatch 109942960 bytes
+dist/test-host 109631664 bytes
+f8e708a0f76df8df658e69e2d100f68ce6a56257b456842a7ee5ad9194ecc500  dist/agentwatch
+5582658421a8fc3782198d412ca54b822299f27769a40898266f95fc3c6d4da8  dist/test-host

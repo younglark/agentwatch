@@ -1,0 +1,43 @@
+bun test v1.4.4 (38afee6c8)
+
+test/core.test.ts:
+228 |     return realClose(fd);
+229 |   }) as any);
+230 |   try {
+231 |     await expect(engine.logs(task.id)).rejects.toMatchObject({code:'IPC_AUTH'});
+232 |     expect(attempts).toBeGreaterThan(0);
+233 |     expect(descriptors()).toEqual(before);
+                                ^
+error: expect(received).toEqual(expected)
+
+- []
++ [
++   11,
++ ]
+
+- Expected  - 1
++ Received  + 3
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:233:27)
+(fail) inode validation still closes the log descriptor when the first closeSync throws [66.61ms]
+237 | test('directory-swap cleanup still disposes engine, store and temp dir if path restore throws',async()=>{
+238 |   const root=mkdtempSync(join(tmpdir(),'aw-cleanup-skip-')),state=join(root,'state');mkdirSync(state,{mode:0o700});
+239 |   const db=await openStorage(state),engine=await createTaskEngine({state,store:db.store,verify:async()=>{},execute:fixtureExecutor});
+240 |   try {
+241 |     await expect(restoreThenDispose(()=>{throw new Error('injected path restore failure');},engine,db,root)).rejects.toThrow('injected path restore failure');
+242 |     expect(existsSync(root)).toBe(false);
+                                   ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/core.test.ts:242:30)
+(fail) directory-swap cleanup still disposes engine, store and temp dir if path restore throws [11.79ms]
+
+ 0 pass
+ 16 filtered out
+ 2 fail
+ 5 expect() calls
+Ran 2 tests across 1 file. [413.00ms]
+exit_code=1
