@@ -1,11 +1,15 @@
 # 首批 task-core 切片：OpenCode v2 源码映射与任务
 
-**当前差异以末尾 t186 登录/刷新与复审修复章节为准；首批、t183 和 t185 均保留为各轮历史边界。**
+**本文件为按轮次保存的历史研究映射：t186 之后的通知、进程树和修复增量，以正式包 README / RESULTS 最新章节为准。**
+
+2026-11-21 原型清理：旧根 `src/` 与最小 daemon spike 已移除，根 Node 安装入口已停用。
+下文各轮对旧文件/原型「仍保留」的描述仅代表当时状态；固定 Git 档案与有用接受条件见
+[历史原型索引](historical-prototypes.md)，当前构建入口见[根 README](../README.md)。
 
 日期：2026-11-20，Asia/Shanghai。依据当前完整实施计划 Page
 21811694-d2c2-469b-bd34-9bb2ffc50219；不是增加通用 PoC，也不重开
 Bun / 四家普通 CLI / 通知实测搁置等决定。新实现位于 packages/agentwatch，
-旧 src/ 是历史 auth/RPC PoC，原实验保留，不视为正式实现。
+当时的旧 src/ 为历史 auth/RPC PoC、原实验为独立验证；两者现已退役，不视为正式实现。
 
 以下链接的固定 SHA 均是正式 2.3.2（c0ad18b...），本轮实际远程读取过；
 历史依赖调研 d643... 是 manifest 2.3.0 开发快照，不能混称正式 tag。
@@ -123,10 +127,10 @@ JSON 编码与未证实边界见 packages/agentwatch/evidence/direct-http/upstre
 数量/完整验收日志见 RESULTS。本轮无真实后端、登录、refresh 或发送；独立复审仍待主线程。
 
 
-## t186：平台鉴权、独立登录/刷新与复审边界修复（当前，2026-11-20，Asia/Shanghai）
+## t186：平台鉴权、独立登录/刷新与复审边界修复（历史，2026-11-20，Asia/Shanghai）
 
 本节覆盖 t185「无官方桌面凭据读取代码 / 无 refresh / 无登录」的当轮历史边界；
-这些表述不再代表当前正式包。原始 `src/` 仍是历史 PoC，不是正式包依赖。
+这些表述不再代表当前正式包。原始根 `src/` 当时为历史 PoC、非正式包依赖，现已移除。
 
 - 三端均保留任务 daemon；macOS 只用 agentwatch 自有独立鉴权，Linux/Windows 只读
   官方 Grok Bot `sand-secrets.json` 的 access token，绝不 refresh 或写回官方会话。

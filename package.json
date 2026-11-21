@@ -1,41 +1,18 @@
 {
-  "name": "agentwatch",
-  "version": "0.2.0",
-  "description": "Wrap a non-interactive agent command and notify a Grok Bot when it finishes, fails, or times out.",
+  "name": "agentwatch-repository",
+  "private": true,
   "type": "module",
-  "bin": {
-    "agentwatch": "./dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "description": "Repository-only Bun scripts for packages/agentwatch; not a distribution package.",
+  "packageManager": "bun@1.4.4",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
-    "agentwatch": "node dist/cli.js",
-    "prepare": "tsc -p tsconfig.json"
-  },
-  "engines": {
-    "node": ">=20"
+    "typecheck": "bun run --cwd packages/agentwatch typecheck",
+    "test": "bun run --cwd packages/agentwatch test",
+    "build": "bun run --cwd packages/agentwatch build",
+    "build:test-host": "bun run --cwd packages/agentwatch build:test-host",
+    "verify": "bun run --cwd packages/agentwatch verify"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/younglark/agentwatch.git"
-  },
-  "bugs": {
-    "url": "https://github.com/younglark/agentwatch/issues"
-  },
-  "homepage": "https://github.com/younglark/agentwatch#readme",
-  "dependencies": {
-    "@bufbuild/protobuf": "1.10.1",
-    "@connectrpc/connect": "1.6.1",
-    "@connectrpc/connect-node": "1.6.1"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.10",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
   }
 }

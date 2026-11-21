@@ -1,4 +1,51 @@
-# t212 全仓审查三项修复（PGID 失效、取消定时器、相对 cwd）— current
+# t215 原型清理与根入口停用 — current
+
+2026-11-21，Asia/Shanghai。固定基线 `ece162fe42e8a73b1987e84fb32d24ecc6bb39c3`
+（`feat/bun-task-core`）。只处理本仓库内已被正式包替代的 PoC；本轮实现/验证完成时
+尚未 commit/push，等待独立复审。不改 git config、不做 PR/release。
+
+## 删除、保留与根入口
+
+- 删除 66 个已跟踪旧文件：根 `src/` 30 个、`test/` 10 个；根专属 `package-lock.json`
+  与 `tsconfig.json`；最小 `experiments/bun-daemon-spike/` 24 个（含专属配置/锁、
+  source/test/scripts、历史实验文档和 6 份实验专属证据）。Git 是原型档案，不复制快照。
+- 根 `package.json` 改成 private Bun **脚本门面**（不是 workspace/安装包）；不再有
+  Node bin、prepare、依赖、根锁或自动安装/下载脚本。typecheck/test/build/
+  build:test-host/verify 只转发 `packages/agentwatch` 的同名脚本。
+- 根 README 只指向正式 Bun 构建、验证和 `packages/agentwatch/dist/agentwatch`。
+  旧 Node `dist/cli.js`、npm/tsc 与 GitHub npx 入口停用，不提供旧 CLI 自动兼容层，
+  不宣称 npm 发布或新分发可用。正式包 CLI 名称/状态目录/IPC/API/任务行为未改。
+- 有用接受条件与固定 Git 档案整理到 `docs/historical-prototypes.md`，保留 OpenCode
+  研究映射并标明历史时态；更新正式 README 的旧根 bin 描述。
+- 正式源码/测试/迁移/依赖锁和全部正式 evidence 原样保留；118 个相对 import 均在
+  正式包内解析，不需要迁移旧模块。正式 RESULTS / REVIEW / evidence 的历史命令、
+  当时的「未提交」和旧路径作为当轮记录保留，不是当前活入口。
+- 不删除 ignored 的旧实验 node_modules/dist 或未知文件，不执行这些旧本地产物。
+  根忽略规则仍覆盖它们。无安装操作、无依赖下载、无新锁文件。
+
+## 验证
+
+仓外证据：`/workspace/agentwatch-cleanup-20261121/`。先对根 manifest/停用入口的约束
+作 red（旧 bin、非 private），改后 green；删除前后保存 import/fixture/配置引用扫描与
+正式包 SHA-256 清单。根脚本实际调用均正确转入正式目录，不只是静态匹配字符串。
+
+| 检查 | 实际结果 |
+|---|---|
+| 根脚本 `bun run typecheck` | 通过 |
+| 根脚本 `bun run test -t 'enrollProcessGroup\|relative --cwd follows'` | 2 pass / 0 fail，25 expects，2.90s |
+| 根 `build` / `build:test-host` | 两项通过 |
+| 根 `bun run verify` 的 typecheck | 通过 |
+| 完整源码套件 | 229 pass / 0 fail，1782 expects，103.23s |
+| 正式二进制编译 | 415 modules；bundle 44ms / compile 347ms |
+| 编译测试宿主 | 365 modules；bundle 45ms / compile 315ms |
+| compiled 套件 | 75 pass / 0 fail，606 expects，36.49s |
+| `git diff --check`、当前文档相对链接、活引用检查 | 通过 |
+
+全部测试仍使用临时 HOME、合成凭据、本地 HTTP mock 或自有进程夹具，无真实凭据、
+真实后端/通知或厂商 CLI。本次不修通知刷新门闩、同步 keyring 截止、脱敏或 Windows
+Job Object。正式包平台验收边界不变。
+
+# t212 全仓审查三项修复（PGID 失效、取消定时器、相对 cwd）— historical
 
 2026-11-21，Asia/Shanghai。基线是已推送的 `9ac8fb94fe93bb20d062b6ff690cde5918742254`
 （`feat/bun-task-core`）。本增量未 commit、未 push、未改 git config，不做 live

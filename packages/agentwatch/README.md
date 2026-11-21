@@ -9,8 +9,10 @@ production-ready runner**. 身份查询和通知由 agentwatch 内建的 Bun HTT
 无可用凭据 → `AUTH_NOT_CONFIGURED`（exit 4），不插任务、不启动 native 命令。
 没有生产 fake-verifier flag / `--auth` / `AGENTWATCH_AUTH_MODE` 逃逸。
 
-The original root src/ and experiments/bun-daemon-spike remain historical code.
-This package is built independently; it does not replace the legacy root bin yet.
+The original root PoC and minimal daemon spike have been retired from the current
+tree; see [historical contracts](../../docs/historical-prototypes.md) for fixed Git
+references. This package remains independently built. The private root manifest
+only forwards its Bun scripts; the legacy Node bin / npx install entry is disabled.
 
 ## Build and verify (Bun 1.4.4)
 
