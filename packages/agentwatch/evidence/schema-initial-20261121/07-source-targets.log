@@ -1,0 +1,45 @@
+$ bun run --cwd packages/agentwatch test -t "embedded initial schema|schema|initial storage"
+$ bun test test/core.test.ts test/process-tree.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts -t "embedded initial schema|schema|initial storage"
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+
+test/auth.test.ts:
+
+test/auth-legacy-session.test.ts:
+
+test/core.test.ts:
+(pass) initial storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [30.26ms]
+(pass) future schema versions fail closed rather than rewriting schema [11.05ms]
+(pass) old development schema 1 is rejected without changing task/outbox bytes [5.72ms]
+(pass) old development schema 2 is rejected without changing task/outbox bytes [17.05ms]
+(pass) new initial schema contains complete task/outbox constraints, defaults and indexes without a migration chain [8.89ms]
+(pass) reopening initial schema retains task/outbox identity and never resets uncertain notification attempts [20.50ms]
+(pass) unsupported schema unknown-table is rejected before any database mutation [4.69ms]
+(pass) unsupported schema partial-legacy is rejected before any database mutation [3.96ms]
+(pass) unsupported schema empty-migrations is rejected before any database mutation [2.00ms]
+(pass) unsupported schema missing-metadata is rejected before any database mutation [4.82ms]
+(pass) unsupported schema wrong-checksum is rejected before any database mutation [4.46ms]
+(pass) unsupported schema missing-table is rejected before any database mutation [4.44ms]
+(pass) unsupported schema missing-index is rejected before any database mutation [3.99ms]
+(pass) unsupported schema empty-metadata is rejected before any database mutation [4.04ms]
+(pass) unsupported schema foreign-user-version is rejected before any database mutation [1.43ms]
+(pass) unsupported schema foreign-application-id is rejected before any database mutation [1.44ms]
+(pass) unsupported schema used-empty-database is rejected before any database mutation [3.04ms]
+
+test/process-tree.test.ts:
+
+test/auth-refresh-interleavings.test.ts:
+
+test/auth-boundaries.test.ts:
+
+test/cli.test.ts:
+(pass) source CLI: old development schema 1 fails CLI startup with exit 12 and leaves the database intact [422.42ms]
+(pass) source CLI: old development schema 2 fails CLI startup with exit 12 and leaves the database intact [401.05ms]
+(pass) source CLI: embedded initial schema creates complete outbox and preserves terminal records across daemon restart [1387.77ms]
+
+ 20 pass
+ 226 filtered out
+ 0 fail
+ 80 expect() calls
+Ran 20 tests across 8 files. [2.45s]

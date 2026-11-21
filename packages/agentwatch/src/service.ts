@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { randomBytes,randomUUID,createHash,timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { CoreError,failure,PROTOCOL,integer,exitCodes } from './domain.ts';
-import { openStorage } from './storage.ts';
+import { openStorage,SCHEMA_MISMATCH_MESSAGE } from './storage.ts';
 import { createTaskEngine } from './engine.ts';
 import { nativeExecutor,type Executor,type Verifier } from './process.ts';
 export const VERSION='0.1.0';
@@ -127,13 +127,25 @@ export async function ensure(path:string,self:readonly string[]) {
     return info;
   }
   try{const found=await health();if(found)return found;}catch(e){if(!(e instanceof CoreError)||e.code!=='TRANSPORT_NOT_CONFIGURED')throw e;}
-  const child=spawn(self[0]!,[...self.slice(1),'internal-serve','--state',state],{detached:true,stdio:'ignore',windowsHide:true});
-  let spawnError=false;child.on('error',()=>spawnError=true);child.unref();
+  let spawnError=false;
+  const start=()=>{
+    const child=spawn(self[0]!,[...self.slice(1),'internal-serve','--state',state],{detached:true,stdio:'ignore',windowsHide:true});
+    child.on('error',()=>spawnError=true);child.unref();return child;
+  };
   const end=Date.now()+8000;
+  let child=start(),retryAt:number|undefined,retryDelay=25;
   while(Date.now()<end) {
     if(spawnError)throw new CoreError('TRANSPORT_NOT_CONFIGURED','Could not start daemon');
     try{const found=await health();if(found)return found;}catch(e){if(e instanceof CoreError&&['IPC_AUTH','VERSION_MISMATCH'].includes(e.code))throw e;}
-    await pause(25);
+    if(child.exitCode===exitCodes.VERSION_MISMATCH)throw new CoreError('VERSION_MISMATCH',SCHEMA_MISMATCH_MESSAGE);
+    // A contender that loses the lease exits 0 without checking the task DB.
+    // If no authenticated winner appeared, contend again within the same deadline
+    // so this client can own the schema check, not mistake another's refusal for a timeout.
+    if(child.exitCode===0){
+      retryAt??=Date.now()+retryDelay;
+      if(Date.now()>=retryAt){child=start();retryAt=undefined;retryDelay=Math.min(retryDelay*2,200);}
+    }
+    await pause(Math.min(25,Math.max(0,end-Date.now())));
   }
   throw new CoreError('TRANSPORT_NOT_CONFIGURED','Daemon startup timed out');
 }

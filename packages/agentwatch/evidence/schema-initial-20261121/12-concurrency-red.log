@@ -1,0 +1,44 @@
+$ bun run --cwd packages/agentwatch test -t "concurrent startup old schema 2 round 1"
+$ bun test test/core.test.ts test/process-tree.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts -t "concurrent startup old schema 2 round 1"
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+
+test/auth.test.ts:
+
+test/auth-legacy-session.test.ts:
+
+test/core.test.ts:
+
+test/process-tree.test.ts:
+
+test/auth-refresh-interleavings.test.ts:
+
+test/auth-boundaries.test.ts:
+
+test/cli.test.ts:
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":1,"clients":8,"exit12":6,"exit8":2,"max_elapsed_ms":8372,"bytesUnchanged":true,"recordsUnchanged":true}
+41 |     try{
+42 |       recordsUnchanged=JSON.stringify({tasks:raw.query('SELECT * FROM tasks ORDER BY id').all(),outbox:raw.query('SELECT * FROM outbox ORDER BY event_id').all()})===JSON.stringify(records);
+43 |     }finally{raw.close();}
+44 |     console.log('SCHEMA_CONCURRENT_REFUSAL '+JSON.stringify({version,round,clients:results.length,exit12:results.filter(r=>r.code===12).length,exit8:results.filter(r=>r.code===8).length,max_elapsed_ms:Math.round(Math.max(...results.map(r=>r.elapsed))),bytesUnchanged,recordsUnchanged}));
+45 |     for(const result of results){
+46 |       expect(result.code,result.err).toBe(12);expect(result.out).toBe('');
+                                          ^
+error: {"version":1,"error":{"code":"TRANSPORT_NOT_CONFIGURED","message":"Daemon startup timed out"}}
+
+
+Expected: 12
+Received: 8
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:46:38)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:16:52)
+(fail) source CLI: concurrent startup old schema 2 round 1: every client receives exit 12 within the original deadline [8398.61ms]
+
+ 0 pass
+ 253 filtered out
+ 1 fail
+ 16 expect() calls
+Ran 1 test across 8 files. [8.51s]
+error: script "test" exited with code 1
+error: script "test" exited with code 1

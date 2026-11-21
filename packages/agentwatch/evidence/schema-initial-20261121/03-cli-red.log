@@ -1,0 +1,43 @@
+$ bun run --cwd packages/agentwatch test -t "old development schema 2 fails CLI startup"
+$ bun test test/core.test.ts test/process-tree.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts -t "old development schema 2 fails CLI startup"
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+
+test/auth.test.ts:
+
+test/auth-legacy-session.test.ts:
+
+test/core.test.ts:
+
+test/process-tree.test.ts:
+
+test/auth-refresh-interleavings.test.ts:
+
+test/auth-boundaries.test.ts:
+
+test/cli.test.ts:
+16 |     const h=commandHarness(cli,host,env);try{await body(h);}finally{await h.cleanup();}
+17 |   },20000);
+18 |   for(const version of [1,2] as const)check(`old development schema ${version} fails CLI startup with exit 12 and leaves the database intact`,async h=>{
+19 |     const {file,records}=seedLegacyDatabase(h.state,version),before=readFileSync(file);
+20 |     const result=await h.call('status',['11111111-1111-4111-8111-111111111111']);
+21 |     expect(result.code,result.err).toBe(12);expect(result.out).toBe('');
+                                        ^
+error: {"version":1,"error":{"code":"TRANSPORT_NOT_CONFIGURED","message":"Daemon startup timed out"}}
+
+
+Expected: 12
+Received: 8
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:21:36)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:16:52)
+(fail) source CLI: old development schema 2 fails CLI startup with exit 12 and leaves the database intact [8302.11ms]
+
+ 0 pass
+ 231 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 8 files. [8.41s]
+error: script "test" exited with code 1
+error: script "test" exited with code 1

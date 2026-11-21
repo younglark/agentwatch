@@ -1,0 +1,38 @@
+$ bun run --cwd packages/agentwatch test -t "concurrent startup old schema|concurrent production CLI ensure"
+$ bun test test/core.test.ts test/process-tree.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts -t "concurrent startup old schema|concurrent production CLI ensure"
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+
+test/auth.test.ts:
+
+test/auth-legacy-session.test.ts:
+
+test/core.test.ts:
+
+test/process-tree.test.ts:
+
+test/auth-refresh-interleavings.test.ts:
+
+test/auth-boundaries.test.ts:
+
+test/cli.test.ts:
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":1,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":1070,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 1 round 1: every client receives exit 12 within the original deadline [1097.93ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":2,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":887,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 1 round 2: every client receives exit 12 within the original deadline [903.04ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":3,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":1099,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 1 round 3: every client receives exit 12 within the original deadline [1118.39ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":1,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":1003,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 2 round 1: every client receives exit 12 within the original deadline [1026.41ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":2,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":1038,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 2 round 2: every client receives exit 12 within the original deadline [1056.58ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":3,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":1407,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) source CLI: concurrent startup old schema 2 round 3: every client receives exit 12 within the original deadline [1434.11ms]
+(pass) source CLI: concurrent production CLI ensure elects one compatible daemon [711.25ms]
+
+ 7 pass
+ 247 filtered out
+ 0 fail
+ 273 expect() calls
+Ran 7 tests across 8 files. [7.45s]

@@ -1,0 +1,31 @@
+{
+  "baseline": "2c57edccb2a3880a81f34c4e3c43a87037d7a433",
+  "branch": "main",
+  "initial_schema_sha256": "0e7b7baef1ca13b5117282d5702162674ec82d5a3f764ccd5f920ce8cbb92f00",
+  "all_relative_imports_resolve": 118,
+  "production_sql_assets": [
+    "src/schema.sql"
+  ],
+  "production_upgrade_chain": false,
+  "legacy_sql_only_in_test_fixture": true,
+  "database_byte_equality_assertions": "old 001 and 002 direct storage and normal CLI, plus future metadata and 13 unknown/partial layouts",
+  "new_evidence_real_secret_scan": "no matches",
+  "leftover_this_task_fixture_dirs": [],
+  "fixture_processes": [],
+  "preexisting_fixture_dirs_not_touched": [
+    {
+      "path": "/tmp/aw-core-LFVOLp",
+      "modified_shanghai": "2026-11-20T20:46:37.509486+08:00",
+      "action": "left untouched; older than this task"
+    }
+  ],
+  "hidden_source": false,
+  "staged": false,
+  "full_verify": {
+    "source_pass": 248,
+    "source_fail": 0,
+    "compiled_pass": 78,
+    "compiled_fail": 0
+  },
+  "review": "same-session check only; independent parent review pending"
+}

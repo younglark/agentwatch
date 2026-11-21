@@ -1,0 +1,71 @@
+{
+  "time_asia_shanghai": "2026-11-21T13:13:34.624792+08:00",
+  "baseline": "2c57edccb2a3880a81f34c4e3c43a87037d7a433",
+  "branch": "main",
+  "staged": false,
+  "worktree_dirty": true,
+  "production_schema_sha256": "0e7b7baef1ca13b5117282d5702162674ec82d5a3f764ccd5f920ce8cbb92f00",
+  "production_relative_imports": 59,
+  "unresolved_imports": [],
+  "active_legacy_migration_references": [],
+  "concurrency": [
+    {
+      "log": "14-concurrency-source-green.log",
+      "rounds": 6,
+      "clients": 48,
+      "exit12": 48,
+      "exit8": 0,
+      "max_elapsed_ms": 1407,
+      "all_bytes_and_records_unchanged": true
+    },
+    {
+      "log": "16-concurrency-compiled-green.log",
+      "rounds": 6,
+      "clients": 48,
+      "exit12": 48,
+      "exit8": 0,
+      "max_elapsed_ms": 828,
+      "all_bytes_and_records_unchanged": true
+    },
+    {
+      "log": "17-concurrency-full-verify.log",
+      "rounds": 12,
+      "clients": 96,
+      "exit12": 96,
+      "exit8": 0,
+      "max_elapsed_ms": 1139,
+      "all_bytes_and_records_unchanged": true
+    }
+  ],
+  "full_verify": {
+    "command": "bun run verify (repository root)",
+    "log": "17-concurrency-full-verify.log",
+    "exit": 0,
+    "typecheck": "pass",
+    "source_pass": 254,
+    "source_fail": 0,
+    "source_expects": 2122,
+    "compiled_pass": 84,
+    "compiled_fail": 0,
+    "compiled_expects": 901,
+    "production_build_modules": 414,
+    "test_host_build_modules": 364
+  },
+  "secret_pattern_scan_hits": [],
+  "remaining_fixture_dirs": [
+    {
+      "path": "/tmp/aw-core-LFVOLp",
+      "ctime_shanghai": "2026-11-20T20:46:37.509486+08:00"
+    }
+  ],
+  "preexisting_fixture_action": "/tmp/aw-core-LFVOLp predates this task; not opened or deleted",
+  "fixture_process_pids": [],
+  "hidden_source": false,
+  "diff_check": "pass",
+  "review_status": "Initial independent Standards 0 findings predates concurrent fix; same-session check only for this fix; independent parent rereview pending",
+  "scope_excluded": [
+    "commit/stage/push/PR/release",
+    "real user databases/backends/credentials/vendor CLIs",
+    "S3/S5/redaction/Windows"
+  ]
+}

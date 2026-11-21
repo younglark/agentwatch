@@ -86,7 +86,7 @@ agentwatch logout [--state DIR]
   does not reap their groups).
 - Other codes: 2 usage; 3 not found; 4 auth unavailable; 5 bot forbidden; 6 request
   conflict; 7 IPC auth; 8 local/external lookup transport unavailable; 11 draining; 12 version /
-  migration incompatibility. Unknown transport interruptions are not called success.
+  schema incompatibility. Unknown transport interruptions are not called success.
 
 ## 平台写死的鉴权（不做 auto，没有 --auth）
 
@@ -268,8 +268,33 @@ owner; it does not lock the task database. Crash releases ownership without stal
 PID killing. See the explicit adaptation in ../../docs/task-core-opencode-map.md.
 
 Effect Layer/Scope owns the SQLite client; Drizzle uses that same Effect client.
-Embedded migration has a checksum/version gate. Task terminal state and stable
-outbox event commit together. Lost starting/running/cancelling tasks become unknown,
+Development builds embed one CREATE-only `src/schema.sql`, containing the complete
+initial tasks/outbox schema and indexes. There is no development upgrade chain or
+legacy `delivered` column. Incremental upgrade scripts will be maintained only
+after an official release; no release is implied here.
+
+A pristine database is initialized transactionally. Existing databases must match
+`schema_info` version 1, its SHA-256 of the embedded SQL, and the actual table/index
+definitions. Old 001/002 development databases, missing/unknown schema objects or
+metadata, and unsupported fingerprints are refused with `VERSION_MISMATCH`
+(exit 12). No DROP, record conversion, automatic rebuild, state-directory deletion
+or task/outbox erasure is performed. WAL is enabled only after this gate succeeds,
+so rejection does not rewrite a legacy database's journal mode. CLI startup
+preserves this error rather than reporting a generic daemon startup timeout.
+A lease-losing startup contender exits 0 without inspecting the task database;
+if no authenticated healthy winner appears, the client retries a contender with
+25–200ms backoff within the same 8-second startup deadline. This lets concurrent
+clients each observe the refusal under the lifecycle lease, without shared error
+files or a separate client-side database connection. Healthy winners are reused;
+a persistently unavailable lease/service still respects the original timeout.
+
+Stop old daemon instances before switching development builds. For incompatible
+state, keep the original database and use a new `--state` directory; back up/export
+records before considering a manual migration. Never delete state just to make a
+version error disappear. Existing task/notification records are not imported or
+replayed into the new directory automatically.
+
+Task terminal state and stable outbox event commit together. Lost starting/running/cancelling tasks become unknown,
 never replayed. After an abrupt termination, previously queued (unstarted) records
 remain eligible for dispatch with a new pre-spawn verifier check. Successful drain
 has a stronger guarantee: synchronously close admission, settle all admitted commit

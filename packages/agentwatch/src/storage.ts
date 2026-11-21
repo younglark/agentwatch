@@ -7,10 +7,10 @@ import { createHash,randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { closeSync,openSync,lstatSync,constants } from 'node:fs';
 import { CoreError,normalize,terminal,type RunInput,type State } from './domain.ts';
-import migration from './migrations/001.sql' with {type:'text'};
-import notificationMigration from './migrations/002.sql' with {type:'text'};
+import schema from './schema.sql' with {type:'text'};
+export const SCHEMA_MISMATCH_MESSAGE='Unsupported development database schema; existing records were left intact. Use a new --state directory, or back up/export this database before manual migration.';
 export interface NotificationRecord {
-  event_id:string;task_id:string;terminal:string;payload:string;delivered:number;
+  event_id:string;task_id:string;terminal:string;payload:string;
   state:string;message_id:string|null;attempts:number;next_attempt_at:number;
   receipt:string|null;last_code:string|null;reconcile_attempts:number;
 }
@@ -29,19 +29,34 @@ const make=Effect.gen(function*(){
     if(!rows[0])return yield* Effect.fail(new CoreError('NOT_FOUND','Task not found'));
     return rows[0];
   });
-  const migrations=[migration,notificationMigration].map(text=>({text,digest:createHash('sha256').update(text).digest('hex')}));
+  const statements=schema.split(';').map(s=>s.trim()).filter(Boolean);
+  const digest=createHash('sha256').update(schema).digest('hex');
+  const canonical=(text:string)=>text.replace(/\s+/g,' ').trim();
+  const definitions=statements.map(canonical).sort();
+  const mismatch=()=>new CoreError('VERSION_MISMATCH',SCHEMA_MISMATCH_MESSAGE);
   yield* sql`PRAGMA foreign_keys=ON`;
   yield* sql.withTransaction(Effect.gen(function*(){
-    yield* sql`CREATE TABLE IF NOT EXISTS migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)`;
-    const versions=yield* sql<{version:number;checksum:string}>`SELECT version,checksum FROM migrations ORDER BY version`;
-    if(versions.length>migrations.length||versions.some((row,i)=>row.version!==i+1||row.checksum!==migrations[i]!.digest))
-      throw new CoreError('VERSION_MISMATCH','Unsupported database migration version');
-    for(let i=versions.length;i<migrations.length;i++){
-      const current=migrations[i]!;
-      for(const statement of current.text.split(';').map(s=>s.trim()).filter(Boolean))yield* sql.unsafe(statement);
-      yield* sql`INSERT INTO migrations(version,checksum) VALUES (${i+1},${current.digest})`;
+    // Inspect before creating anything: old migrations, partial or unknown schemas
+    // must never be treated as a fresh database or silently upgraded.
+    const objects=yield* sql<{sql:string}>`SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT GLOB 'sqlite_*'`;
+    const [version]=yield* sql<{schema_version:number}>`PRAGMA schema_version`;
+    const [user]=yield* sql<{user_version:number}>`PRAGMA user_version`;
+    const [application]=yield* sql<{application_id:number}>`PRAGMA application_id`;
+    if(user?.user_version!==0||application?.application_id!==0)throw mismatch();
+    if(!objects.length){
+      if(version?.schema_version!==0)throw mismatch();
+      for(const statement of statements)yield* sql.unsafe(statement);
+      yield* sql`INSERT INTO schema_info(version,checksum) VALUES (1,${digest})`;
+      return;
     }
+    const actual=objects.map(row=>canonical(row.sql)).sort();
+    if(JSON.stringify(actual)!==JSON.stringify(definitions))throw mismatch();
+    const rows=yield* sql<{version:number;checksum:string}>`SELECT version,checksum FROM schema_info`;
+    if(rows.length!==1||rows[0]!.version!==1||rows[0]!.checksum!==digest)throw mismatch();
   }));
+  // The client is opened with disableWAL so rejected databases are not rewritten
+  // just by opening them. Enable WAL only after the schema gate succeeds.
+  yield* sql`PRAGMA journal_mode=WAL`;
   const finish=(id:string,state:State,exit_code:number|null=null,error_code:string|null=null)=>sql.withTransaction(Effect.gen(function*(){
     const current=yield* get(id);if(terminal(current.state))return current;
     const next=state==='unknown'?'unknown':current.state==='cancelling'?'cancelled':state;
@@ -119,7 +134,7 @@ export function storageLayer(state:string) {
   // Own state directory is checked by service bootstrap; never import legacy auth files.
   closeSync(openSync(file,constants.O_CREAT|constants.O_APPEND|constants.O_WRONLY|(constants.O_NOFOLLOW??0),0o600));
   const stat=lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||(stat.mode&0o077)!==0)throw new CoreError('IPC_AUTH','Unsafe database permissions');
-  return Layer.effect(Storage,make).pipe(Layer.provide(SqliteClient.layer({filename:file})));
+  return Layer.effect(Storage,make).pipe(Layer.provide(SqliteClient.layer({filename:file,disableWAL:true})));
 }
 export async function openStorage(state:string) {
   const runtime=ManagedRuntime.make(storageLayer(state));

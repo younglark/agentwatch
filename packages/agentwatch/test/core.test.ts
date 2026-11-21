@@ -1,10 +1,10 @@
 import { test, expect, spyOn } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync,chmodSync,realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, readlinkSync, closeSync, symlinkSync, mkdirSync, unlinkSync, existsSync,chmodSync,realpathSync } from 'node:fs';
 import { tmpdir,hostname } from 'node:os';
 import { join } from 'node:path';
 import { openStorage } from '../src/storage.ts';
 
-test('migrated storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together',async()=>{
+test('initial storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together',async()=>{
   const state=mkdtempSync(join(tmpdir(),'aw-core-'));
   const db=await openStorage(state);
   try {
@@ -14,7 +14,7 @@ test('migrated storage deduplicates exact requests, rejects changed argv, commit
     await expect(db.store.submit({...input,argv:['claude','changed']})).rejects.toMatchObject({code:'CONFLICT'});
     await db.store.finish(first.id,'succeeded',0);
     expect((await db.store.get(first.id)).state).toBe('succeeded');
-    expect(await db.store.outbox()).toMatchObject([{task_id:first.id,terminal:'succeeded',delivered:0}]);
+    expect(await db.store.outbox()).toMatchObject([{task_id:first.id,terminal:'succeeded',state:'pending'}]);
   } finally {await db.close();rmSync(state,{recursive:true,force:true});}
 });
 
@@ -97,10 +97,14 @@ test('outbox insertion failure rolls back terminal state',async()=>{
     expect((await db.store.get(task.id)).state).toBe('queued');expect(await db.store.outbox()).toHaveLength(0);
   }finally{fault.close();await db.close();rmSync(state,{recursive:true,force:true});}
 });
-test('future migration versions fail closed rather than rewriting schema',async()=>{
-  const state=mkdtempSync(join(tmpdir(),'aw-core-')),db=await openStorage(state);await db.close();
-  const raw=new Database(join(state,'tasks.sqlite'));raw.run('UPDATE migrations SET version=999 WHERE version=(SELECT MAX(version) FROM migrations)');raw.close();
-  try{await expect(openStorage(state)).rejects.toMatchObject({code:'VERSION_MISMATCH'});}finally{rmSync(state,{recursive:true,force:true});}
+test('future schema versions fail closed rather than rewriting schema',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-schema-future-')),db=await openStorage(state);await db.close();
+  const file=join(state,'tasks.sqlite'),raw=new Database(file);raw.exec('PRAGMA ignore_check_constraints=ON; UPDATE schema_info SET version=999');raw.close();
+  const before=readFileSync(file);
+  try{
+    await expect(openStorage(state)).rejects.toMatchObject({code:'VERSION_MISMATCH'});
+    expect(readFileSync(file)).toEqual(before);
+  }finally{rmSync(state,{recursive:true,force:true});}
 });
 
 import { nativeExecutor } from '../src/process.ts';
@@ -246,25 +250,21 @@ test('directory-swap cleanup still disposes engine, store and temp dir if path r
   }
 });
 
-import initialMigration from '../src/migrations/001.sql' with {type:'text'};
-import { createHash } from 'node:crypto';
-test('notification migration preserves legacy pending and never invents durable delivery',async()=>{
-  const state=mkdtempSync(join(tmpdir(),'aw-notice-migration-')),file=join(state,'tasks.sqlite');
-  const raw=new Database(file);
-  raw.exec(initialMigration);raw.exec('CREATE TABLE migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)');
-  raw.query('INSERT INTO migrations VALUES(1,?)').run(createHash('sha256').update(initialMigration).digest('hex'));
-  for(const [id,delivered] of [['11111111-1111-4111-8111-111111111111',0],['22222222-2222-4222-8222-222222222222',1]] as const){
-    raw.query('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,id,'old-fingerprint',JSON.stringify({request_id:id,bot:'test-bot',cwd:state,argv:['claude']}),'succeeded',null,0,null,1,1);
-    raw.query('INSERT INTO outbox VALUES(?,?,?,?,?)').run(id+':terminal:1',id,'succeeded',JSON.stringify({version:1,event_id:id+':terminal:1',task_id:id,state:'succeeded',exit_code:0,error_code:null}),delivered);
-  }
-  raw.close();chmodSync(file,0o600);
-  let db:Awaited<ReturnType<typeof openStorage>>|undefined;
+import { legacyInitial,seedLegacyDatabase } from './schema-fixtures.ts';
+for(const version of [1,2] as const)test(`old development schema ${version} is rejected without changing task/outbox bytes`,async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-schema-old-'));
+  const {file,records}=seedLegacyDatabase(state,version);
+  const before=readFileSync(file);
   try{
-    db=await openStorage(state);const rows=await db.store.outbox();
-    expect(rows).toMatchObject([{state:'pending',delivered:0},{state:'unknown',delivered:1,last_code:'LEGACY_DELIVERY_UNVERIFIED'}]);
-    const first=rows[0]!;await db.store.finish(first.task_id,'failed',1);expect(await db.store.outbox()).toHaveLength(2);
-    await db.close();db=await openStorage(state);expect(await db.store.outbox()).toEqual(rows);
-  }finally{await db?.close();rmSync(state,{recursive:true,force:true});}
+    // Close a wrongly accepted DB as well, so red cannot leave an open runtime.
+    await expect(openStorage(state).then(async db=>{await db.close();})).rejects.toMatchObject({code:'VERSION_MISMATCH'});
+    expect(readFileSync(file)).toEqual(before);
+    const check=new Database(file,{readonly:true});
+    try{
+      expect(check.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(records.tasks);
+      expect(check.query('SELECT * FROM outbox ORDER BY event_id').all()).toEqual(records.outbox);
+    }finally{check.close();}
+  }finally{rmSync(state,{recursive:true,force:true});}
 });
 
 // The engine seam is where deterministic local pre-dispatch failures are injected.
@@ -453,3 +453,73 @@ test('logs query command is labeled for the actual platform and does not present
   expect(quoteState("C:\\Users\\O'Brien\\aw",'win32')).toBe("'C:\\Users\\O''Brien\\aw'");
   expect(quoteState("/tmp/o're",'linux')).toBe("'/tmp/o'\"'\"'re'");
 });
+
+
+test('new initial schema contains complete task/outbox constraints, defaults and indexes without a migration chain',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-schema-new-'));let db:Awaited<ReturnType<typeof openStorage>>|undefined;
+  try{
+    db=await openStorage(state);
+    const task=await db.store.submit({request_id:'new-schema',bot:'test-bot',cwd:state,argv:['claude']});
+    await db.store.finish(task.id,'succeeded',0);
+    expect(await db.store.notification(task.id)).toMatchObject({state:'pending',message_id:null,attempts:0,next_attempt_at:0,receipt:null,last_code:null,reconcile_attempts:0});
+    await db.close();db=undefined;
+    const raw=new Database(join(state,'tasks.sqlite'),{readonly:true});
+    try{
+      expect(raw.query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()).toEqual([{name:'outbox'},{name:'schema_info'},{name:'tasks'}]);
+      expect((raw.query('PRAGMA table_info(outbox)').all() as {name:string}[]).map(r=>r.name)).toEqual(['event_id','task_id','terminal','payload','state','message_id','attempts','next_attempt_at','receipt','last_code','reconcile_attempts']);
+      expect(raw.query("SELECT name FROM sqlite_schema WHERE type='index' AND sql IS NOT NULL ORDER BY name").all()).toEqual([{name:'outbox_pending'},{name:'task_queue'}]);
+      expect(raw.query('SELECT version,length(checksum) AS length FROM schema_info').all()).toEqual([{version:1,length:64}]);
+      expect(raw.query('PRAGMA journal_mode').get()).toEqual({journal_mode:'wal'});
+      expect(raw.query('PRAGMA foreign_key_check').all()).toEqual([]);
+    }finally{raw.close();}
+  }finally{await db?.close();rmSync(state,{recursive:true,force:true});}
+});
+
+test('reopening initial schema retains task/outbox identity and never resets uncertain notification attempts',async()=>{
+  const state=mkdtempSync(join(tmpdir(),'aw-schema-reopen-'));let db=await openStorage(state);
+  try{
+    const input={request_id:'reopen-schema',bot:'test-bot',cwd:state,argv:['claude']};
+    const task=await db.store.submit(input);await db.store.finish(task.id,'succeeded',0);
+    const claimed=(await db.store.claimNotification())!;
+    await db.store.completeNotification(claimed.event_id,{state:'unknown',code:'WRITE_UNCERTAIN',receipt:{delivery:'unknown'}});
+    await db.store.claimReconciliation();
+    const taskBefore=await db.store.get(task.id),noticeBefore=await db.store.notification(task.id);
+    await db.close();db=await openStorage(state);
+    expect(await db.store.get(task.id)).toEqual(taskBefore);
+    expect(await db.store.submit(input)).toEqual(taskBefore);
+    expect(await db.store.notification(task.id)).toEqual(noticeBefore);
+    expect(noticeBefore).toMatchObject({state:'unknown',message_id:claimed.message_id,attempts:1,reconcile_attempts:1,last_code:'WRITE_UNCERTAIN'});
+    expect(await db.store.claimNotification()).toBeUndefined();
+    expect(await db.store.claimReconciliation()).toBeUndefined();
+  }finally{await db.close();rmSync(state,{recursive:true,force:true});}
+});
+
+for(const kind of ['unknown-table','partial-legacy','empty-migrations','missing-metadata','wrong-checksum','missing-table','missing-index','empty-metadata','extra-table','sqlite-prefix-table','foreign-user-version','foreign-application-id','used-empty-database'] as const){
+  test(`unsupported schema ${kind} is rejected before any database mutation`,async()=>{
+    const state=mkdtempSync(join(tmpdir(),'aw-schema-invalid-')),file=join(state,'tasks.sqlite');
+    if(['missing-metadata','wrong-checksum','missing-table','missing-index','empty-metadata','extra-table','sqlite-prefix-table'].includes(kind)){
+      const db=await openStorage(state);await db.close();
+    }
+    const raw=new Database(file);
+    try{
+      if(kind==='unknown-table')raw.exec("CREATE TABLE notes(value TEXT); INSERT INTO notes VALUES('keep this record')");
+      if(kind==='partial-legacy')raw.exec(legacyInitial.split('CREATE TABLE outbox')[0]!);
+      if(kind==='empty-migrations')raw.exec('CREATE TABLE migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)');
+      if(kind==='missing-metadata')raw.exec('DROP TABLE schema_info');
+      if(kind==='wrong-checksum')raw.exec("UPDATE schema_info SET checksum='unknown'");
+      if(kind==='missing-table')raw.exec('DROP TABLE outbox');
+      if(kind==='missing-index')raw.exec('DROP INDEX outbox_pending');
+      if(kind==='empty-metadata')raw.exec('DELETE FROM schema_info');
+      if(kind==='extra-table')raw.exec("CREATE TABLE notes(value TEXT); INSERT INTO notes VALUES('keep this record')");
+      if(kind==='sqlite-prefix-table')raw.exec("CREATE TABLE sqliteXnotes(value TEXT); INSERT INTO sqliteXnotes VALUES('not an internal table')");
+      if(kind==='foreign-user-version')raw.exec('PRAGMA user_version=9');
+      if(kind==='foreign-application-id')raw.exec('PRAGMA application_id=7');
+      if(kind==='used-empty-database')raw.exec('CREATE TABLE removed(value TEXT); DROP TABLE removed');
+    }finally{raw.close();chmodSync(file,0o600);}
+    const before=readFileSync(file);
+    try{
+      await expect(openStorage(state).then(async db=>{await db.close();})).rejects.toMatchObject({code:'VERSION_MISMATCH'});
+      expect(readFileSync(file)).toEqual(before);
+    }finally{rmSync(state,{recursive:true,force:true});}
+  });
+}

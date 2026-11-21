@@ -1,0 +1,22 @@
+bun test v1.4.4 (38afee6c8)
+
+test/compiled.test.ts:
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":1,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":417,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 1 round 1: every client receives exit 12 within the original deadline [435.48ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":2,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":411,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 1 round 2: every client receives exit 12 within the original deadline [420.97ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":1,"round":3,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":401,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 1 round 3: every client receives exit 12 within the original deadline [409.58ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":1,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":560,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 2 round 1: every client receives exit 12 within the original deadline [573.73ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":2,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":552,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 2 round 2: every client receives exit 12 within the original deadline [570.91ms]
+SCHEMA_CONCURRENT_REFUSAL {"version":2,"round":3,"clients":8,"exit12":8,"exit8":0,"max_elapsed_ms":828,"bytesUnchanged":true,"recordsUnchanged":true}
+(pass) compiled CLI isolated-PATH: concurrent startup old schema 2 round 3: every client receives exit 12 within the original deadline [839.86ms]
+(pass) compiled CLI isolated-PATH: concurrent production CLI ensure elects one compatible daemon [240.81ms]
+
+ 7 pass
+ 77 filtered out
+ 0 fail
+ 273 expect() calls
+Ran 7 tests across 1 file. [3.75s]

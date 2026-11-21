@@ -51,7 +51,7 @@ bin、prepare、安装 hook 或自己的依赖/锁。请用 `bun run test`，不
 - [原型退役与保留契约索引](docs/historical-prototypes.md)（Git 固定链接，不另存快照）
 - [正式包验证记录](packages/agentwatch/RESULTS.md)
 
-正式包的代码、测试、依赖锁、迁移与证据仍独立保留。历史记录中的旧路径和命令仅是
+正式包的代码、测试、依赖锁、初始 schema 与证据仍独立保留。历史记录中的旧路径和命令仅是
 当时的验证依据，不是当前可执行入口。
 
 ## 许可证与边界

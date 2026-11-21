@@ -1,4 +1,83 @@
-# t215 原型清理与根入口停用 — current
+# t220 开发期单份初始 schema — current
+
+2026-11-21，Asia/Shanghai。固定基线 `2c57edccb2a3880a81f34c4e3c43a87037d7a433`
+（main）。本增量实现/验证后尚未暂存、未 commit/push/PR，等待父代理独立复审；不改
+依赖或 git config，不触真实用户状态库。正式发布后才维护增量迁移，目前没有发布行为。
+
+## 结构与版本策略
+
+- 删除运行时 `src/migrations/001.sql` / `002.sql` 及空 migrations 目录；合成单份
+  CREATE-only `src/schema.sql`，直接建立完整 tasks/outbox、队列与 outbox 索引。
+  生产只以 text import 嵌入这一份 SQL。旧 ALTER / delivered 数据转译仅作为历史夹具
+  保存在 `test/schema-fixtures.ts`，不进生产依赖。
+- `delivered` 已无通知运行逻辑依赖，只残留 NotificationRecord 类型和旧断言；新表和
+  类型去掉该弃用字段，继续沿用 pending/inflight/accepted/rejected/not_dispatched/
+  unknown、固定 message_id、attempt/reconcile 预算等现有通知语义。
+- 最小兼容门闩：`schema_info` 一行 version=1 + 嵌入 SQL 的 SHA-256；同时比对实际
+  table/index/其他对象定义，不仅信任 metadata。空库必须没有用户 schema 对象、没有
+  schema 历史（schema_version=0），user_version/application_id 也必须为 0。
+- 建表/兼容判断都在同一事务里。旧 migrations、旧 001 或 002、未知/缺失表或索引、
+  metadata 缺失/空/校验不符、未来版本、外国数据库标记等均 fail closed。打开连接先
+  disableWAL，通过门闩之后才启用 WAL；拒绝前不先创建元数据表或改变旧库 journal mode。
+- 不做 DROP、任务/通知记录转换、自动重建、删 state 或自动迁移。提示使用新的 --state
+  目录，并先备份/导出原库；新目录不会自动导入或重放旧任务/通知。切换开发二进制前应
+  先停止旧 daemon，避免混跑同版本号旧实例。
+- 必要边界修正：ensure 原来会把后台 daemon 的 schema 拒绝吞成 8 秒启动超时 exit 8；
+  先探测经过鉴权的健康实例，再透传本客户端 child 的 VERSION_MISMATCH。独立 Spec
+  审查发现 lease 竞争失败的 child 退出 0，所属客户端仍误报 8；现对此状态按 25–200ms
+  退避重新参加选主，沿用同一个 8 秒启动截止、不延长窗口。数据库检查仍只由持有
+  lifecycle lease 的 daemon 完成，不用共享错误文件、不由客户端打开任务库；健康获胜
+  实例仍优先复用。不改 lease、鉴权 IPC、startDaemon 竞争失败返回或其他退出码语义。
+
+错误码为 `VERSION_MISMATCH`（exit 12），正文：
+
+> Unsupported development database schema; existing records were left intact. Use a new --state directory, or back up/export this database before manual migration.
+
+## TDD 与无数据损失证据
+
+证据在 `evidence/schema-initial-20261121/`：
+
+- `01-legacy-red.log`：原实现接受旧 001/002，2 fail；随后 `02-legacy-green.log` 2 pass。
+  两个旧开发库均有两条任务和两条 outbox（含旧 delivered=0/1）。拒绝后断言主库完整
+  bytes 相同，并逐行 SELECT 对比任务/outbox 内容未变；不对真实用户库作试验。
+- `03-cli-red.log`：普通 CLI 启动错误曾为 TRANSPORT_NOT_CONFIGURED/exit 8；
+  `04-cli-green.log` 覆盖旧两版的存储/API 与普通 CLI 错误透传。
+- `09-final-targets.log`：22 pass，84 expects；覆盖新库字段/默认值/索引/metadata、重开
+  同一任务和不确定通知（message_id / attempts / reconcile_attempts 不重置、不盲重发）、
+  未来 metadata 与 13 种未知/部分布局拒绝且 bytes 不变，以及 CLI 旧库错误。
+- 共享 command-contracts 包含 9 项 schema 契约（两个旧库、一个新库创建/重启、六轮
+  并发拒绝），源码和编译产物均执行；compiled 套件临时隐藏整个 src（含 schema.sql），
+  证明新 SQL 真正嵌入产物而非从源目录加载。新库重启任务/outbox 不变，同 ID 不重复启动。
+- 并发 P2 的 red：`12-concurrency-red.log` 旧002库八并发得到 6 次 exit12 / 2 次 exit8，
+  库 bytes/records 仍不变。修复后 `14-concurrency-source-green.log` 与
+  `16-concurrency-compiled-green.log` 各 7 pass / 0 fail、273 expects（包含既有健康选主）。
+  两版旧库各三轮、每轮八并发，source 48/48 与 compiled 48/48 均为 exit12、无 exit8；
+  最慢客户端分别 1407ms / 828ms。所有12个合成库均 bytes 与任务/outbox 记录不变。
+- 最终完整 verify 再次运行同样并发契约：source 48/48、compiled 48/48 均 exit12，
+  最慢 1134ms / 1139ms，另12个合成库 bytes/records 不变。定向加全量合计192个
+  并发客户端全部12、无8；没有 daemon 注册或后端调用。
+
+## 完整验证（本增量）
+
+`17-concurrency-full-verify.log` 为并发 P2 修复后从根重新执行 `bun run verify`，
+单独 typecheck/目标测试也通过。`10-verify.log` 的 248 source / 78 compiled 为修复前
+历史记录，不是本轮最终数字。初次独立 Standards 的0发现不覆盖这次并发修复；本次仅
+作同会话检查，仍等待父代理独立复审，不将自查视作独立审查通过。
+
+| 检查 | 实际结果 |
+|---|---|
+| typecheck | 通过 |
+| schema 目标套件 | 22 pass / 0 fail，84 expects，2.85s |
+| 完整源码套件 | 254 pass / 0 fail，2122 expects，105.93s |
+| 正式产物编译 | 414 modules；bundle 39ms / compile 461ms |
+| 测试宿主编译 | 364 modules；bundle 35ms / compile 264ms |
+| compiled 套件 | 84 pass / 0 fail，901 expects，41.21s |
+
+旧数据库迁移路径的活 import 已无；历史研究映射、RESULTS 与旧 evidence 按历史保留，
+不为清引用而删除历史证据。没有原型复活、依赖安装/下载、真实凭据/后端/厂商 CLI。
+不修 S3 通知刷新门闩、S5 同步 keyring 截止、脱敏或 Windows Job Object。
+
+# t215 原型清理与根入口停用 — historical
 
 2026-11-21，Asia/Shanghai。固定基线 `ece162fe42e8a73b1987e84fb32d24ecc6bb39c3`
 （`feat/bun-task-core`）。只处理本仓库内已被正式包替代的 PoC；本轮实现/验证完成时

@@ -1,0 +1,43 @@
+$ bun run --cwd packages/agentwatch test -t "schema|initial storage"
+$ bun test test/core.test.ts test/process-tree.test.ts test/cli.test.ts test/auth.test.ts test/auth-boundaries.test.ts test/auth-refresh-interleavings.test.ts test/auth-legacy-session.test.ts test/auth-metadata-migration.test.ts -t "schema|initial storage"
+bun test v1.4.4 (38afee6c8)
+
+test/auth-metadata-migration.test.ts:
+
+test/auth.test.ts:
+
+test/auth-legacy-session.test.ts:
+
+test/core.test.ts:
+(pass) initial storage deduplicates exact requests, rejects changed argv, commits terminal and outbox together [27.76ms]
+(pass) future schema versions fail closed rather than rewriting schema [6.43ms]
+(pass) old development schema 1 is rejected without changing task/outbox bytes [5.63ms]
+(pass) old development schema 2 is rejected without changing task/outbox bytes [9.08ms]
+(pass) new initial schema contains complete task/outbox constraints, defaults and indexes without a migration chain [5.64ms]
+(pass) reopening initial schema retains task/outbox identity and never resets uncertain notification attempts [10.98ms]
+(pass) unsupported schema unknown-table is rejected before any database mutation [3.07ms]
+(pass) unsupported schema partial-legacy is rejected before any database mutation [2.33ms]
+(pass) unsupported schema empty-migrations is rejected before any database mutation [1.63ms]
+(pass) unsupported schema missing-metadata is rejected before any database mutation [5.69ms]
+(pass) unsupported schema wrong-checksum is rejected before any database mutation [3.79ms]
+(pass) unsupported schema missing-table is rejected before any database mutation [3.92ms]
+(pass) unsupported schema missing-index is rejected before any database mutation [6.31ms]
+(pass) unsupported schema empty-metadata is rejected before any database mutation [5.49ms]
+(pass) unsupported schema foreign-user-version is rejected before any database mutation [1.60ms]
+(pass) unsupported schema used-empty-database is rejected before any database mutation [1.81ms]
+
+test/process-tree.test.ts:
+
+test/auth-refresh-interleavings.test.ts:
+
+test/auth-boundaries.test.ts:
+
+test/cli.test.ts:
+(pass) source CLI: old development schema 1 fails CLI startup with exit 12 and leaves the database intact [396.21ms]
+(pass) source CLI: old development schema 2 fails CLI startup with exit 12 and leaves the database intact [396.61ms]
+
+ 18 pass
+ 226 filtered out
+ 0 fail
+ 65 expect() calls
+Ran 18 tests across 8 files. [1002.00ms]

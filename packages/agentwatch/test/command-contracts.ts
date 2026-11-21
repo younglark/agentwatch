@@ -5,6 +5,7 @@ import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { commandHarness,until,alive } from './command-harness.ts';
 import { readRegistration,request } from '../src/service.ts';
+import { seedLegacyDatabase } from './schema-fixtures.ts';
 function ledgerRows(state:string,requestId:string) {
   const db=new Database(join(state,'tasks.sqlite'),{readonly:true});
   try{return db.query('SELECT id FROM tasks WHERE request_id=?').all(requestId);}
@@ -14,6 +15,63 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
   const check=(name:string,body:(h:ReturnType<typeof commandHarness>)=>Promise<void>)=>test(`${label}: ${name}`,async()=>{
     const h=commandHarness(cli,host,env);try{await body(h);}finally{await h.cleanup();}
   },20000);
+  for(const version of [1,2] as const)check(`old development schema ${version} fails CLI startup with exit 12 and leaves the database intact`,async h=>{
+    const {file,records}=seedLegacyDatabase(h.state,version),before=readFileSync(file);
+    const result=await h.call('status',['11111111-1111-4111-8111-111111111111']);
+    expect(result.code,result.err).toBe(12);expect(result.out).toBe('');
+    expect(JSON.parse(result.err).error).toMatchObject({code:'VERSION_MISMATCH'});
+    expect(result.err).toContain('new --state directory');
+    expect(readFileSync(file)).toEqual(before);
+    const raw=new Database(file,{readonly:true});
+    try{
+      expect(raw.query('SELECT * FROM tasks ORDER BY id').all()).toEqual(records.tasks);
+      expect(raw.query('SELECT * FROM outbox ORDER BY event_id').all()).toEqual(records.outbox);
+    }finally{raw.close();}
+    expect(readRegistration(h.state)).toBeUndefined();expect(h.calls).toHaveLength(0);
+  });
+  for(const version of [1,2] as const)for(const round of [1,2,3])check(`concurrent startup old schema ${version} round ${round}: every client receives exit 12 within the original deadline`,async h=>{
+    const {file,records}=seedLegacyDatabase(h.state,version),before=readFileSync(file);
+    const results=await Promise.all(Array.from({length:8},async()=>{
+      const started=performance.now();
+      const result=await h.call('status',['11111111-1111-4111-8111-111111111111']);
+      return {...result,elapsed:performance.now()-started};
+    }));
+    const bytesUnchanged=readFileSync(file).equals(before);
+    const raw=new Database(file,{readonly:true});let recordsUnchanged=false;
+    try{
+      recordsUnchanged=JSON.stringify({tasks:raw.query('SELECT * FROM tasks ORDER BY id').all(),outbox:raw.query('SELECT * FROM outbox ORDER BY event_id').all()})===JSON.stringify(records);
+    }finally{raw.close();}
+    console.log('SCHEMA_CONCURRENT_REFUSAL '+JSON.stringify({version,round,clients:results.length,exit12:results.filter(r=>r.code===12).length,exit8:results.filter(r=>r.code===8).length,max_elapsed_ms:Math.round(Math.max(...results.map(r=>r.elapsed))),bytesUnchanged,recordsUnchanged}));
+    for(const result of results){
+      expect(result.code,result.err).toBe(12);expect(result.out).toBe('');
+      expect(JSON.parse(result.err).error).toMatchObject({code:'VERSION_MISMATCH'});
+      expect(result.err).toContain('new --state directory');
+      expect(result.elapsed).toBeLessThan(8000);
+    }
+    expect(bytesUnchanged).toBe(true);expect(recordsUnchanged).toBe(true);
+    expect(readRegistration(h.state)).toBeUndefined();expect(h.calls).toHaveLength(0);
+  });
+  check('embedded initial schema creates complete outbox and preserves terminal records across daemon restart',async h=>{
+    const host=(await h.startHost())!;
+    const run=await h.call('run',['--bot','test-bot','--request-id','initial-schema','--cwd',h.cwd,'--','claude']);
+    expect(run.code,run.err).toBe(0);const id=run.value.data.id;
+    const done=await h.call('wait',[id,'--timeout','5']);expect(done.code,done.err).toBe(0);
+    expect(done.value.data.task).toMatchObject({id,state:'succeeded'});
+    const before=await h.call('status',[id]);expect(before.value.data.notification.state).toBe('pending');
+    const raw=new Database(join(h.state,'tasks.sqlite'),{readonly:true});
+    try{
+      expect(raw.query('SELECT version FROM schema_info').all()).toEqual([{version:1}]);
+      expect(raw.query("SELECT name FROM sqlite_schema WHERE name='migrations'").all()).toEqual([]);
+      expect((raw.query('PRAGMA table_info(outbox)').all() as {name:string}[]).map(r=>r.name)).not.toContain('delivered');
+      expect(raw.query('SELECT state,attempts,reconcile_attempts FROM outbox').all()).toEqual([{state:'pending',attempts:0,reconcile_attempts:0}]);
+    }finally{raw.close();}
+    await request(host,'shutdown',{});await until(async()=>alive(host.pid),v=>!v,3000);
+    await h.startHost();
+    const after=await h.call('status',[id]);expect(after.code,after.err).toBe(0);
+    expect(after.value.data).toEqual(before.value.data);
+    expect((await h.call('run',['--bot','test-bot','--request-id','initial-schema','--cwd',h.cwd,'--','claude'])).value.data.id).toBe(id);
+    expect(h.receipts()).toHaveLength(1);expect(h.calls).toHaveLength(0);
+  });
   check('five JSON commands preserve native argv and timeout never cancels',async h=>{
     const info=(await h.startHost())!;expect((await request(info,'health',{})).bot_verifier).toBe('test_only');
     const argv=['claude','-p','hello 空格','', '--resume','session-id','--json','long'];
