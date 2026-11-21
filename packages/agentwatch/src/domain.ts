@@ -1,5 +1,5 @@
 import { Schema } from 'effect';
-import { basename, resolve } from 'node:path';
+import { basename, isAbsolute, resolve } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 export const PROTOCOL=1;
 export const terminalStates=['succeeded','failed','cancelled','unknown'] as const;
@@ -22,6 +22,7 @@ export function normalize(value:unknown):RunInput {
   if(!input.argv.length||input.argv.some(s=>s.includes('\0'))||Buffer.byteLength(JSON.stringify(input.argv))>32768)throw new CoreError('USAGE','Invalid or oversized argv');
   // Program-name allowlist only, NOT a sandbox. Absolute paths are allowed for these names.
   if(!['claude','opencode','codex','grok'].includes(basename(input.argv[0]!)))throw new CoreError('USAGE','Program is not one of the four supported CLIs');
+  if(!isAbsolute(input.cwd))throw new CoreError('USAGE','Working directory must be an absolute path');
   let cwd:string;try{cwd=realpathSync(resolve(input.cwd));if(!statSync(cwd).isDirectory())throw new Error();}catch{throw new CoreError('USAGE','Working directory must exist');}
   return {request_id:input.request_id,bot:input.bot,cwd,argv:[...input.argv]};
 }

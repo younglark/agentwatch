@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+137 |     child.cancel();
+138 |     await child.exited;
+139 |     await until('force-killed grandchild',()=>!alive(grand.pid),GRACE_MS+1500);
+140 |     expect(forced).toBe(true);
+141 |     expect(alive(grand.pid)).toBe(false);
+142 |     expect(child.activeWatches?.()).toBe(0);
+                                          ^
+error: expect(received).toBe(expected)
+
+Expected: 0
+Received: 1
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:142:37)
+(fail) spawnArgv cancel does not leak a watch interval when the root closes during grace [1035.09ms]
+
+ 0 pass
+ 9 filtered out
+ 1 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [1143.00ms]

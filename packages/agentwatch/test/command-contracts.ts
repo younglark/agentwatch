@@ -30,6 +30,31 @@ export function commandContracts(label:string,cli:readonly string[],host:readonl
     const errlog=await h.call('logs',[id,'--stream','stderr']);expect(errlog.value.data.text).toBe('fixture stderr\n');
     expect((await h.call('logs',[id,'--limit','65537'])).code).toBe(2);
   });
+  check('relative --cwd follows the CLI caller directory, not the daemon start directory',async h=>{
+    const daemonCwd=join(h.root,'daemon-cwd'),clientCwd=h.cwd,project=join(clientCwd,'project'),decoy=join(daemonCwd,'project');
+    mkdirSync(daemonCwd,{mode:0o700});mkdirSync(project,{mode:0o700});mkdirSync(decoy,{mode:0o700});
+    const info=(await h.startHost({cwd:daemonCwd}))!;
+    async function observed(id:string){
+      const done=await h.call('wait',[id,'--timeout','5']);expect(done.code,done.err).toBe(0);
+      const log=await h.call('logs',[id]);expect(log.code,log.err).toBe(0);
+      return JSON.parse(log.value.data.text).cwd as string;
+    }
+    await expect(request(info,'run',{request_id:'rel-cwd',bot:'test-bot',cwd:'project',argv:['claude']})).rejects.toMatchObject({code:'USAGE'});
+    await expect(request(info,'run',{request_id:'dot-cwd',bot:'test-bot',cwd:'.',argv:['claude']})).rejects.toMatchObject({code:'USAGE'});
+    expect(ledgerRows(h.state,'rel-cwd')).toHaveLength(0);expect(ledgerRows(h.state,'dot-cwd')).toHaveLength(0);
+    const relative=await h.call('run',['--bot','test-bot','--request-id','rel-project','--cwd','project','--','claude'],{cwd:clientCwd});
+    expect(relative.code,relative.err).toBe(0);
+    expect(await observed(relative.value.data.id)).toBe(realpathSync(project));
+    const dot=await h.call('run',['--bot','test-bot','--request-id','rel-dot','--cwd','.','--','claude'],{cwd:clientCwd});
+    expect(dot.code,dot.err).toBe(0);
+    expect(await observed(dot.value.data.id)).toBe(realpathSync(clientCwd));
+    const omitted=await h.call('run',['--bot','test-bot','--request-id','rel-default','--','claude'],{cwd:clientCwd});
+    expect(omitted.code,omitted.err).toBe(0);
+    expect(await observed(omitted.value.data.id)).toBe(realpathSync(clientCwd));
+    const absolute=await h.call('run',['--bot','test-bot','--request-id','rel-abs','--cwd',project,'--','claude'],{cwd:clientCwd});
+    expect(absolute.code,absolute.err).toBe(0);
+    expect(await observed(absolute.value.data.id)).toBe(realpathSync(project));
+  });
   check('concurrent same ID returns one fixture process; changed argv conflicts',async h=>{
     await h.startHost();const args=['--bot','test-bot','--request-id','duplicate','--cwd',h.cwd,'--','codex','exec','hi'];
     const runs=await Promise.all(Array.from({length:4},()=>h.call('run',args)));

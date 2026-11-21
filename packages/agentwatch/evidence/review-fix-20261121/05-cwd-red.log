@@ -1,0 +1,23 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+37 |     async function observed(id:string){
+38 |       const done=await h.call('wait',[id,'--timeout','5']);expect(done.code,done.err).toBe(0);
+39 |       const log=await h.call('logs',[id]);expect(log.code,log.err).toBe(0);
+40 |       return JSON.parse(log.value.data.text).cwd as string;
+41 |     }
+42 |     await expect(request(info,'run',{request_id:'rel-cwd',bot:'test-bot',cwd:'project',argv:['claude']})).rejects.toMatchObject({code:'USAGE'});
+                                                                                                                       ^
+error: expect(received).rejects.toMatchObject(expected)
+
+Expected promise that rejects
+Received promise that resolved: Promise { <resolved> }
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:42:115)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/command-contracts.ts:15:52)
+(fail) source CLI: relative --cwd follows the CLI caller directory, not the daemon start directory [407.92ms]
+
+ 0 pass
+ 76 filtered out
+ 1 fail
+Ran 1 test across 1 file. [519.00ms]

@@ -6,6 +6,10 @@ export interface Child {
   pid:number;
   exited:Promise<number|null>;
   cancel():void;
+  /** Test seam: live cancel-watch intervals for this tree. */
+  activeWatches?():number;
+  /** Test seam: drop leftover watches so a failing case cannot pin the process. */
+  releaseWatches?():void;
 }
 export type Executor=(input:RunInput,files:{stdout:string;stderr:string})=>Child;
 export type Verifier=(input:RunInput)=>Promise<void>;
@@ -83,38 +87,49 @@ export function spawnArgv(command:readonly string[],cwd:string,files:{stdout:str
     let phase:'idle'|'term'|'killed'='idle';
     let forceTimer:ReturnType<typeof setTimeout>|undefined;
     let watchTimer:ReturnType<typeof setInterval>|undefined;
+    const watches=new Set<ReturnType<typeof setInterval>>();
     let settleTree!:()=>void;
     const treeSettled=new Promise<void>(resolve=>{settleTree=resolve;});
-    const groupGone=()=>{
-      if(pgid===undefined)return true;
-      if(signalProcessGroup(pgid,0)==='gone'){pgid=undefined;return true;}
-      return false;
+    const startWatch=(fn:()=>void)=>{
+      if(watchTimer){clearInterval(watchTimer);watches.delete(watchTimer);watchTimer=undefined;}
+      watchTimer=setInterval(fn,10);
+      watches.add(watchTimer);
     };
     const finishTree=()=>{
       if(forceTimer){clearTimeout(forceTimer);forceTimer=undefined;}
-      if(watchTimer){clearInterval(watchTimer);watchTimer=undefined;}
+      if(watchTimer){clearInterval(watchTimer);watches.delete(watchTimer);watchTimer=undefined;}
       settleTree();
     };
+    // Every signal site drops the id once the group is gone (ESRCH), including
+    // repeated cancel and force. EPERM is not disappearance and keeps the id.
+    const dropGroup=()=>{pgid=undefined;phase='killed';finishTree();};
+    const signalEnrolled=(signal:NodeJS.Signals|0)=>{
+      if(pgid===undefined)return 'gone' as const;
+      const result=signalProcessGroup(pgid,signal);
+      if(result==='gone')dropGroup();
+      return result;
+    };
+    const groupGone=()=>signalEnrolled(0)==='gone';
     const force=()=>{
       forceTimer=undefined;
       phase='killed';
-      if(pgid!==undefined)signalProcessGroup(pgid,'SIGKILL');
+      if(pgid!==undefined)signalEnrolled('SIGKILL');
       else try{child.kill('SIGKILL');}catch{}
       if(groupGone()){finishTree();return;}
       const end=Date.now()+200;
-      watchTimer=setInterval(()=>{if(groupGone()||Date.now()>=end)finishTree();},10);
+      startWatch(()=>{if(groupGone()||Date.now()>=end)finishTree();});
     };
     const cancel=()=>{
       if(phase==='killed')return;
       if(phase==='term'){
         // Repeated cancel may re-send TERM but must not restart the grace deadline.
-        if(pgid!==undefined)signalProcessGroup(pgid,'SIGTERM');
+        if(pgid!==undefined)signalEnrolled('SIGTERM');
         else try{child.kill('SIGTERM');}catch{}
         return;
       }
       phase='term';
       if(pgid!==undefined){
-        if(signalProcessGroup(pgid,'SIGTERM')==='gone'){pgid=undefined;phase='killed';finishTree();return;}
+        if(signalEnrolled('SIGTERM')==='gone')return;
       }else{
         try{child.kill('SIGTERM');}catch{}
       }
@@ -128,11 +143,15 @@ export function spawnArgv(command:readonly string[],cwd:string,files:{stdout:str
       // Root close is not group exit. Poll so a cooperative tree can settle
       // during the grace and clear the force timer, instead of waiting the
       // full 1s and SIGKILLing a tree that already accepted SIGTERM.
-      if(!watchTimer)watchTimer=setInterval(()=>{if(groupGone())finishTree();},10);
+      if(!watchTimer)startWatch(()=>{if(groupGone())finishTree();});
       await treeSettled;
       return code;
     });
-    return {pid,exited,cancel};
+    return {
+      pid,exited,cancel,
+      activeWatches:()=>watches.size,
+      releaseWatches:()=>{if(forceTimer){clearTimeout(forceTimer);forceTimer=undefined;}for(const timer of watches)clearInterval(timer);watches.clear();watchTimer=undefined;},
+    };
   } finally {closeSync(out);if(err!==undefined)closeSync(err);}
 }
 export const nativeExecutor:Executor=(input,files)=>{const valid=normalize(input);return spawnArgv(valid.argv,valid.cwd,files);};

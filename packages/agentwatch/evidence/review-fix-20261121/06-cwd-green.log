@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/cli.test.ts:
+(pass) source CLI: relative --cwd follows the CLI caller directory, not the daemon start directory [2603.00ms]
+
+ 1 pass
+ 76 filtered out
+ 0 fail
+ 20 expect() calls
+Ran 1 test across 1 file. [2.73s]

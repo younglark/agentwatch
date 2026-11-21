@@ -25,7 +25,7 @@ export async function runCli(args:string[]) {
   const command=Command.make('agentwatch',{},()=>Effect.fail(new CoreError('USAGE','A command is required'))).pipe(Command.withSubcommands([
     Command.make('run',{...defaults(),bot:Flag.String('bot'),requestId:Flag.String('request-id'),cwd:Flag.String('cwd').pipe(Flag.withDefault(process.cwd()))},c=>task(async()=>{
       if(!native.length)throw new CoreError('USAGE','run requires a supported program after --');
-      await invoke('run',c.state,{request_id:c.requestId,bot:c.bot,cwd:c.cwd,argv:native});
+      await invoke('run',c.state,{request_id:c.requestId,bot:c.bot,cwd:resolve(c.cwd),argv:native});
     })),
     Command.make('status',{...defaults(),id:Argument.String('task-id')},c=>task(()=>invoke('status',c.state,{id:c.id}))),
     Command.make('logs',{...defaults(),id:Argument.String('task-id'),stream:Flag.String('stream').pipe(Flag.withDefault('stdout')),offset:Flag.String('offset').pipe(Flag.withDefault('0')),limit:Flag.String('limit').pipe(Flag.withDefault('4096'))},c=>task(()=>invoke('logs',c.state,{id:c.id,stream:c.stream,offset:integer(Number(c.offset),'offset',Number.MAX_SAFE_INTEGER),limit:integer(Number(c.limit),'limit',65536)}))),

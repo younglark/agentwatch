@@ -17,7 +17,7 @@ function ignoreTerm() {process.on('SIGTERM',()=>{});}
 function stay() {setInterval(()=>{},1000);}
 
 function start(role:string,mode:string,pidfile:string,self:string) {
-  if(mode==='ignore-term'||mode==='root-exit-keep-grand'||(mode==='escape-setsid'&&role==='grand'))ignoreTerm();
+  if(mode==='ignore-term'||mode==='root-exit-keep-grand'||(mode==='term-exit-keep-grand'&&role==='grand')||(mode==='escape-setsid'&&role==='grand'))ignoreTerm();
 
   if(role==='grand'){record(pidfile,'grand');stay();return;}
 
@@ -42,6 +42,14 @@ function start(role:string,mode:string,pidfile:string,self:string) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,20);
     }
     process.exit(0);
+  }
+
+  if(mode==='term-exit-keep-grand'){
+    process.on('SIGTERM',()=>process.exit(0));
+    const grand=spawn(process.execPath,[self,'grand',mode,pidfile],{stdio:'ignore',detached:false});
+    if(!grand.pid)throw new Error('grand could not be started');
+    stay();
+    return;
   }
 
   if(mode==='natural-exit'){

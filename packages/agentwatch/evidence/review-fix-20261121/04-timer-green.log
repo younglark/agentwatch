@@ -1,0 +1,11 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+(pass) spawnArgv cancel does not leak a watch interval when the root closes during grace [1035.77ms]
+(pass) repeated cancel drops a gone process group even if that id later appears live [1154.58ms]
+
+ 2 pass
+ 8 filtered out
+ 0 fail
+ 11 expect() calls
+Ran 2 tests across 1 file. [2.30s]

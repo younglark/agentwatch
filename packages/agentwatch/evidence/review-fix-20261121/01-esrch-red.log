@@ -1,0 +1,45 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+157 |     child.cancel();
+158 |     child.cancel();
+159 |     child.cancel();
+160 |     await new Promise(r=>setTimeout(r,GRACE_MS+150));
+161 |     expect(observedGone).toBe(true);
+162 |     expect(events).toEqual(['SIGTERM','SIGTERM']);
+                         ^
+error: expect(received).toEqual(expected)
+
+  [
+    "SIGTERM",
+    "SIGTERM",
++   "SIGTERM",
++   "SIGKILL",
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
++   0,
+  ]
+
+- Expected  - 0
++ Received  + 17
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:162:20)
+(fail) repeated cancel drops a gone process group even if that id later appears live [1157.26ms]
+
+ 0 pass
+ 8 filtered out
+ 1 fail
+ 5 expect() calls
+Ran 1 test across 1 file. [1281.00ms]

@@ -65,14 +65,14 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
   function notificationCalls(){const file=join(root,'notification-calls');return existsSync(file)?readFileSync(file,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)) as {message_id:string}[]:[];}
   const activeHttp=()=>active.size;
   function nativeFixture(exitCode=0){const file=join(bin,'claude');writeFileSync(file,`#!/bin/sh\nprintf "SECRET_NATIVE_LOG\\n"\nexit ${exitCode}\n`,{mode:0o700});return file;}
-  async function startHost() {
-    const p=Bun.spawn([...host,state],{env,cwd:host.length===1?dirname(host[0]!):undefined,stdout:'ignore',stderr:'ignore'});owned.add(p.pid);
+  async function startHost(opts?:{cwd?:string}) {
+    const p=Bun.spawn([...host,state],{env,cwd:opts?.cwd??(host.length===1?dirname(host[0]!):undefined),stdout:'ignore',stderr:'ignore'});owned.add(p.pid);
     return until(async()=>{
       try{const info=readRegistration(state);if(!info)return undefined;await request(info,'health',{});return info;}catch{return undefined;}
     },(r):r is Registration=>!!r);
   }
-  async function call(action:string,args:string[]=[]) {
-    const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:cli.length===1?dirname(cli[0]!):undefined,stdin:'ignore',stdout:'pipe',stderr:'pipe'});
+  async function call(action:string,args:string[]=[],opts?:{cwd?:string}) {
+    const p=Bun.spawn([...cli,action,'--state',state,...args],{env,cwd:opts?.cwd??(cli.length===1?dirname(cli[0]!):undefined),stdin:'ignore',stdout:'pipe',stderr:'pipe'});
     const [out,err,code]=await Promise.all([new Response(p.stdout).text(),new Response(p.stderr).text(),p.exited]);
     let value:any;if(out)try{value=JSON.parse(out);}catch{if(!args.includes('--help'))throw new Error('stdout is not one JSON value: '+out.slice(0,100));}
     return {out,err,code,value};
@@ -83,7 +83,7 @@ export function commandHarness(cli:readonly string[],host:readonly string[],env:
     for(const pid of owned) {
       if(!alive(pid))continue;
       const args=readFileSync(`/proc/${pid}/cmdline`,'utf8');
-      if(!args.includes(state)&&!args.includes(cwd))throw new Error('Refuse cleanup of unrecognized PID');
+      if(!args.includes(state)&&!args.includes(cwd)&&!args.includes(root))throw new Error('Refuse cleanup of unrecognized PID');
       process.kill(pid,'SIGKILL');await until(async()=>alive(pid),v=>!v,3000);
     }
     backend.stop(true);rmSync(root,{recursive:true,force:true});

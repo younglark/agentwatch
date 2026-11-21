@@ -41,6 +41,9 @@ agentwatch logout [--state DIR]
   This allowlist is not a sandbox. Absolute paths with these basenames are allowed.
 - request-id is required in this slice. Its scope is the state directory; it never
   expires here. Fingerprint covers canonical cwd, bot and every argv element.
+  The CLI resolves --cwd against the caller's directory before IPC; the
+  daemon accepts only an already-absolute path and then realpath-validates
+  it. Omitting --cwd still uses the CLI's absolute process.cwd().
   Same ID/request returns the original task; a changed request conflicts.
 - Operational stdout is one `{version:1,command,data}` JSON line, including without
   a TTY; --json is accepted explicitly. Errors are one `{version:1,error:{code,
@@ -60,10 +63,13 @@ agentwatch logout [--state DIR]
   SIGTERM to that enrolled group, then SIGKILL after a 1 second grace if
   members remain (same grace as Grok Build, not OpenCode's 5s). The grace
   timer is not cleared when the root process closes, so leftovers still in
-  the same group are still force-killed. Enrollment refuses pid 0, 1, the
+  the same group are still force-killed. A tree keeps one cancel-watch
+  interval; replacing it clears the previous handle so a root close during
+  grace cannot leak a poller. Enrollment refuses pid 0, 1, the
   caller's process group, and values that cannot be passed to killpg; the
-  group id is dropped once the group is gone (ESRCH) so a reused PGID is not
-  signaled. The caller-pgid and `/proc` leader checks are Linux-only; other
+  group id is dropped once the group is gone (ESRCH), including on a
+  repeated cancel or force, so a reused PGID is not signaled; that drop also
+  finishes the tree's timers and phase. The caller-pgid and `/proc` leader checks are Linux-only; other
   POSIX platforms still refuse 0, 1, and out-of-range values. An outer group signal is not a whole-tree kill: a descendant
   or vendor CLI that creates its own process group (`setsid` / `setpgid`)
   is outside this contract and is not chased. Process groups of the daemon

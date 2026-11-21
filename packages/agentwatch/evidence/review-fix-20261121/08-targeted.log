@@ -1,0 +1,21 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+(pass) spawnArgv cancel SIGTERM stops a cooperative process tree [46.78ms]
+(pass) spawnArgv cancel still force-kills a grandchild after the root has already closed [1044.23ms]
+(pass) spawnArgv cancel does not leak a watch interval when the root closes during grace [1032.89ms]
+(pass) spawnArgv cancel force-kills a tree that ignores SIGTERM after the 1s grace [1046.78ms]
+(pass) repeated cancel drops a gone process group even if that id later appears live [1154.57ms]
+(pass) spawnArgv cancel does not chase a grandchild that left the group with setsid [44.25ms]
+(pass) concurrent trees are isolated: cancelling one does not signal the other [2059.96ms]
+(pass) cancel after a natural exit does not throw and does not require a live group [92.61ms]
+(pass) engine wait timeout does not kill a managed process tree; drain does not cancel it; cancel marks cancelled after observed close [1350.55ms]
+
+test/cli.test.ts:
+(pass) source CLI: relative --cwd follows the CLI caller directory, not the daemon start directory [3314.97ms]
+
+ 10 pass
+ 77 filtered out
+ 0 fail
+ 68 expect() calls
+Ran 10 tests across 2 files. [11.31s]

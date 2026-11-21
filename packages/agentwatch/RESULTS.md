@@ -1,4 +1,63 @@
-# t206 进程树协作取消（POSIX killpg）— current
+# t212 全仓审查三项修复（PGID 失效、取消定时器、相对 cwd）— current
+
+2026-11-21，Asia/Shanghai。基线是已推送的 `9ac8fb94fe93bb20d062b6ff690cde5918742254`
+（`feat/bun-task-core`）。本增量未 commit、未 push、未改 git config，不做 live
+真实后端，不实现 Windows Job Object。按用户决定，历史根 CLI JSON 脱敏暂不修；
+也不修通知过期刷新门闩（S3）和同步 keyring 截止（S5）。只修正式包三项：
+重复 cancel 遇到 ESRCH 未注销 PGID、取消观察定时器泄漏、相对 `--cwd` 按 daemon
+旧目录解释。
+
+## 行为
+
+- POSIX 组信号：所有信号调用点（初次 TERM、重复 cancel、force 的 SIGKILL、
+  存活探测）在 ESRCH 时原子注销 pgid，并把 phase 置为 killed、结束该树的
+  force/watch 定时器。EPERM 仍不是消失，保留组号。观察到 ESRCH 之后，即使该
+  数字随后再显为 live，也不再向它发信号。
+- 取消观察定时器：一棵树同一时刻只持有一个 watch interval；替换前先清旧句柄。
+  覆盖「先 cancel，根进程在 1s grace 内 close，孙进程忽略 TERM」的交错，
+  `exited` 之后不再留下活动观察 interval。根先退出仍会在 grace 后强杀同组残留；
+  `setsid` 出走不追；wait 超时不杀；drain 不取消正在跑的任务；仍只在观察到
+  close 后标 cancelled。
+- 相对 `--cwd`：CLI 在发出 IPC 前按调用方目录 `resolve` 用户 cwd；daemon 的
+  `normalize` 只接受绝对路径，再 `realpath`/目录校验。未显式 `--cwd` 的默认值
+  仍是 CLI 进程的绝对 `process.cwd()`，不受影响。
+
+## TDD
+
+先写失败测试再改代码。新增：重复 cancel 第二次 TERM 注入 ESRCH 后，即使该
+PGID 再显为 live 也不再发信号，且宽限期后根进程仍存活（证明 force 定时器已
+结束）；真实 Linux 树上 cancel 后根在 grace 内退出、孙进程忽略 TERM，`exited`
+后 `activeWatches()` 为 0（测试缝；失败时 `releaseWatches()` 清掉残留以免挂住
+进程）；源码+编译共享契约「从目录 A 启服务、从目录 B 调 CLI」，覆盖相对
+`project`、`.`、省略 `--cwd`、绝对路径，以及 daemon 直接拒绝相对 cwd。组信号
+测试只拦截/收割自己创建并记录的 pid/pgid，拒绝 0/1/自身组，不对其他任务组发
+真实信号。
+
+日志：`evidence/review-fix-20261121/`。
+
+## 最终验证（本增量全量重跑）
+
+未 commit。`git diff --check` 通过。无 `.compiled-test-src`，无残留
+`process-tree-child` 或 `/tmp/aw-tree-*` 夹具。
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---|---|---|
+| typecheck（`tsc6 --noEmit`） | 通过 | — | 2.72s |
+| 源码 `bun run test`（8 个文件） | 229 / 0 | 1782 | 107.29s |
+| 其中 process-tree.test.ts（Linux，含 2 项新回归） | 10 / 0 | — | 约 11s（目标套件内） |
+| production 编译 | 通过 | 415 modules | bundle 130ms，compile 1090ms |
+| test-host 编译 | 通过 | 365 modules | bundle 37ms，compile 488ms |
+| compiled.test.ts（含相对 cwd 共享契约） | 75 / 0 | 606 | 37.28s |
+
+目标测试（10 项：8 项既有取消契约 + ESRCH/定时器回归 + 源码相对 cwd）10 / 0，11.31s。
+
+## 未做
+
+未修历史根 CLI JSON 脱敏。未修 S3 通知刷新门闩与 S5 同步 keyring 截止。
+Windows Job Object / `.cmd` 树取消仍未实现，也未做 macOS/Windows 原生验收。
+未 commit/push。本文件末的同会话快审不是独立复审。
+
+# t206 进程树协作取消（POSIX killpg）— historical
 
 2026-11-21，Asia/Shanghai。基线仍是已推送的 `f95ba94`（`feat/bun-task-core`）。本增量
 未 commit、未 push、未改 git config，不做 live 真实后端。只实现建议项 1：进程树协作

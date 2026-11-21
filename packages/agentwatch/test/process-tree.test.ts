@@ -113,6 +113,42 @@ tree('spawnArgv cancel still force-kills a grandchild after the root has already
   } finally {reapOwned(child.pid,owned,testPgrp);rmSync(dir,{recursive:true,force:true});}
 });
 
+tree('spawnArgv cancel does not leak a watch interval when the root closes during grace',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'aw-tree-'));const pidfile=join(dir,'pids.jsonl');writeFileSync(pidfile,'');
+  const testPgrp=selfPgrp();const child=startTree('term-exit-keep-grand',dir,pidfile);
+  const owned:number[]=[child.pid];
+  const realKill=process.kill.bind(process);
+  let forced=false,oneDelayedProbe=false;
+  try {
+    await until('grandchild recorded and live',()=>{
+      const grand=readRecords(pidfile).find(r=>r.role==='grand');
+      return !!grand&&alive(grand.pid);
+    });
+    const grand=readRecords(pidfile).find(r=>r.role==='grand')!;
+    owned.push(grand.pid);
+    expect(alive(child.pid)).toBe(true);
+    expect(grand.pgrp).toBe(child.pid);
+    process.kill=((pid:number,signal?:NodeJS.Signals|number)=>{
+      if(pid===-child.pid&&signal==='SIGKILL'){forced=true;oneDelayedProbe=true;return realKill(pid,signal);}
+      // One post-KILL probe stays live so force must replace the close-path watcher.
+      if(pid===-child.pid&&signal===0&&oneDelayedProbe){oneDelayedProbe=false;return true;}
+      return realKill(pid,signal as Parameters<typeof realKill>[1]);
+    }) as typeof process.kill;
+    child.cancel();
+    await child.exited;
+    await until('force-killed grandchild',()=>!alive(grand.pid),GRACE_MS+1500);
+    expect(forced).toBe(true);
+    expect(alive(grand.pid)).toBe(false);
+    expect(child.activeWatches?.()).toBe(0);
+  } finally {
+    process.kill=realKill;
+    child.releaseWatches?.();
+    reapOwned(child.pid,owned,testPgrp);
+    await child.exited.catch(()=>{});
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
 tree('spawnArgv cancel force-kills a tree that ignores SIGTERM after the 1s grace',async()=>{
   const dir=mkdtempSync(join(tmpdir(),'aw-tree-'));const pidfile=join(dir,'pids.jsonl');writeFileSync(pidfile,'');
   const testPgrp=selfPgrp();const child=startTree('ignore-term',dir,pidfile);
@@ -128,6 +164,45 @@ tree('spawnArgv cancel force-kills a tree that ignores SIGTERM after the 1s grac
     await until('forced tree gone',()=>records.every(r=>!alive(r.pid)));
     expect(records.every(r=>!alive(r.pid))).toBe(true);
   } finally {reapOwned(child.pid,owned,testPgrp);rmSync(dir,{recursive:true,force:true});}
+});
+
+tree('repeated cancel drops a gone process group even if that id later appears live',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'aw-tree-'));
+  const testPgrp=selfPgrp();
+  const child=spawnArgv([process.execPath,'-e','process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'],dir,openLogs(dir,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
+  const owned:number[]=[child.pid];
+  const realKill=process.kill.bind(process);
+  const events:Array<NodeJS.Signals|number>=[];
+  let terms=0,observedGone=false;
+  try {
+    expect(child.pid).toBeGreaterThan(1);
+    expect(child.pid).not.toBe(testPgrp);
+    expect(proc(child.pid).pgrp).toBe(child.pid);
+    process.kill=((pid:number,signal?:NodeJS.Signals|number)=>{
+      if(pid===-child.pid){
+        events.push((signal??'SIGTERM') as NodeJS.Signals|number);
+        if(!observedGone&&signal==='SIGTERM'&&++terms===2){
+          observedGone=true;
+          throw Object.assign(new Error('synthetic gone'),{code:'ESRCH'});
+        }
+        // After ESRCH this number looks live; never forward group signals to a real target.
+        return true;
+      }
+      return realKill(pid,signal as Parameters<typeof realKill>[1]);
+    }) as typeof process.kill;
+    child.cancel();
+    child.cancel();
+    child.cancel();
+    await new Promise(r=>setTimeout(r,GRACE_MS+150));
+    expect(observedGone).toBe(true);
+    expect(events).toEqual(['SIGTERM','SIGTERM']);
+    expect(alive(child.pid)).toBe(true);
+  } finally {
+    process.kill=realKill;
+    reapOwned(child.pid,owned,testPgrp);
+    await child.exited.catch(()=>{});
+    rmSync(dir,{recursive:true,force:true});
+  }
 });
 
 tree('spawnArgv cancel does not chase a grandchild that left the group with setsid',async()=>{

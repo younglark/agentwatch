@@ -1,0 +1,10 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+(pass) repeated cancel drops a gone process group even if that id later appears live [1155.31ms]
+
+ 1 pass
+ 8 filtered out
+ 0 fail
+ 6 expect() calls
+Ran 1 test across 1 file. [1268.00ms]
