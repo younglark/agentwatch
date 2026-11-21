@@ -56,6 +56,26 @@ agentwatch logout [--state DIR]
 - wait defaults to 30 seconds, max 300; timeout exits 9 without killing anything;
   unknown exits 10 immediately. Observed child failure exits 1. Running cancel
   becomes cancelled only after observed close; pre-start cancel cannot spawn.
+  On POSIX, each task is started in a new session/process group; cancel sends
+  SIGTERM to that enrolled group, then SIGKILL after a 1 second grace if
+  members remain (same grace as Grok Build, not OpenCode's 5s). The grace
+  timer is not cleared when the root process closes, so leftovers still in
+  the same group are still force-killed. Enrollment refuses pid 0, 1, the
+  caller's process group, and values that cannot be passed to killpg; the
+  group id is dropped once the group is gone (ESRCH) so a reused PGID is not
+  signaled. The caller-pgid and `/proc` leader checks are Linux-only; other
+  POSIX platforms still refuse 0, 1, and out-of-range values. An outer group signal is not a whole-tree kill: a descendant
+  or vendor CLI that creates its own process group (`setsid` / `setpgid`)
+  is outside this contract and is not chased. Process groups of the daemon
+  or of other tasks are never signaled. Windows process-tree / Job Object
+  cancellation is not implemented or natively verified here. Grok Build's
+  Job Object uses JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: closing the job
+  handle — including when the daemon process crashes and the kernel
+  closes leftover handles — terminates every process still in that job.
+  That is a forced tree kill, not keep-alive, and it is not the same as
+  this package's Unix contract (dropping the group handle is a no-op;
+  recover marks leftover starting/running/cancelling tasks unknown and
+  does not reap their groups).
 - Other codes: 2 usage; 3 not found; 4 auth unavailable; 5 bot forbidden; 6 request
   conflict; 7 IPC auth; 8 local/external lookup transport unavailable; 11 draining; 12 version /
   migration incompatibility. Unknown transport interruptions are not called success.
@@ -259,7 +279,7 @@ watchdog and a full contender retry pool are not in this slice.
 
 Live identity/target/send verification, live browser login and live OAuth refresh,
 durable ACK/deduplication evidence, further reconciliation UX, four-vendor E2E,
-production process-tree cancellation (.cmd / Windows included), redaction policy
+Windows process-tree cancellation (Job Object / .cmd), redaction policy
 for potentially sensitive native output, disk retention, upgrades/distribution,
 macOS flock / Windows LockFileEx live lock tests, and full multi-user/Windows ACL
 hardening remain unfinished or unverified here. Windows decryption is implemented

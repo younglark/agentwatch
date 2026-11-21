@@ -1,0 +1,17 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+(pass) enrollProcessGroup refuses degenerate, own-group, and oversized pgids [0.23ms]
+(pass) spawnArgv cancel SIGTERM stops a cooperative process tree [47.32ms]
+(pass) spawnArgv cancel still force-kills a grandchild after the root has already closed [1040.83ms]
+(pass) spawnArgv cancel force-kills a tree that ignores SIGTERM after the 1s grace [1046.14ms]
+(pass) spawnArgv cancel does not chase a grandchild that left the group with setsid [43.97ms]
+(pass) concurrent trees are isolated: cancelling one does not signal the other [2052.21ms]
+(pass) cancel after a natural exit does not throw and does not require a live group [93.04ms]
+(pass) engine wait timeout does not kill a managed process tree; drain does not cancel it; cancel marks cancelled after observed close [1357.62ms]
+
+ 8 pass
+ 0 fail
+ 42 expect() calls
+Ran 8 tests across 1 file. [5.81s]
+TREE_EXIT:0

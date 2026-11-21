@@ -1,0 +1,7 @@
+$ bun build --compile --define AGENTWATCH_COMPILED=true src/main.ts --outfile dist/agentwatch
+  [50ms]  bundle  415 modules
+ [521ms] compile  dist/agentwatch
+$ bun build --compile --define TEST_HOST_COMPILED=true test/host.ts --outfile dist/test-host
+  [46ms]  bundle  365 modules
+ [373ms] compile  dist/test-host
+BUILD_ELAPSED_SEC:1.03 BUILD:0 HOST:0

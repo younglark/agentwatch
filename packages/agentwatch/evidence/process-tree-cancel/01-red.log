@@ -1,0 +1,76 @@
+bun test v1.4.4 (38afee6c8)
+
+test/process-tree.test.ts:
+61 |   const dir=mkdtempSync(join(tmpdir(),'aw-tree-'));const pidfile=join(dir,'pids.jsonl');writeFileSync(pidfile,'');
+62 |   const testPgrp=selfPgrp();const child=startTree('term-exit',dir,pidfile);
+63 |   const owned:number[]=[child.pid];
+64 |   try {
+65 |     expect(proc(child.pid).alive).toBe(true);
+66 |     expect(proc(child.pid).pgrp).toBe(child.pid);
+                                      ^
+error: expect(received).toBe(expected)
+
+Expected: 1082068
+Received: 1082041
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:66:34)
+(fail) spawnArgv cancel SIGTERM stops a cooperative process tree [6.49ms]
+89 |       return !!grand&&alive(grand.pid);
+90 |     });
+91 |     const grand=readRecords(pidfile).find(r=>r.role==='grand')!;
+92 |     owned.push(grand.pid);
+93 |     expect(alive(child.pid)).toBe(false);
+94 |     expect(grand.pgrp).toBe(child.pid);
+                            ^
+error: expect(received).toBe(expected)
+
+Expected: 1082069
+Received: 1082041
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:94:24)
+(fail) spawnArgv cancel still force-kills a grandchild after the root has already closed [36.95ms]
+35 | }
+36 | 
+37 | async function until(label:string,check:()=>boolean|Promise<boolean>,ms=2000) {
+38 |   const end=Date.now()+ms;
+39 |   while(Date.now()<end){if(await check())return;await new Promise(r=>setTimeout(r,20));}
+40 |   throw new Error('timed out waiting for '+label);
+                 ^
+error: timed out waiting for forced tree gone
+      at until (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:40:13)
+      at async <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:114:11)
+(fail) spawnArgv cancel force-kills a tree that ignores SIGTERM after the 1s grace [3043.23ms]
+(pass) spawnArgv cancel does not chase a grandchild that left the group with setsid [43.40ms]
+146 |     await until('A recorded',()=>readRecords(aFile).some(r=>r.role==='grand'));
+147 |     await until('B recorded',()=>readRecords(bFile).some(r=>r.role==='grand'));
+148 |     const aRec=readRecords(aFile),bRec=readRecords(bFile);
+149 |     for(const r of [...aRec,...bRec])owned.push(r.pid);
+150 |     expect(a.pid).not.toBe(b.pid);
+151 |     expect(aRec.every(r=>r.pgrp===a.pid)).toBe(true);
+                                                ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:151:43)
+(fail) concurrent trees are isolated: cancelling one does not signal the other [81.16ms]
+(pass) cancel after a natural exit does not throw and does not require a live group [92.49ms]
+190 |       const status=await engine.status(task.id);
+191 |       return status.state==='running'&&readRecords(pidfile).some(r=>r.role==='grand');
+192 |     },4000);
+193 |     const records=readRecords(pidfile);for(const r of records)owned.push(r.pid);
+194 |     const root=records.find(r=>r.role==='root')!;
+195 |     expect(root.pgrp).not.toBe(testPgrp);
+                                ^
+error: expect(received).not.toBe(expected)
+
+Expected: not 1082041
+
+      at <anonymous> (/workspace/agentwatch-bun-spike/packages/agentwatch/test/process-tree.test.ts:195:27)
+(fail) engine wait timeout does not kill a managed process tree; drain leaves it running; close cancels after observed close [1082.45ms]
+
+ 2 pass
+ 5 fail
+ 16 expect() calls
+Ran 7 tests across 1 file. [4.50s]

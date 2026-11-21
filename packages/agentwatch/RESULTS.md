@@ -1,4 +1,73 @@
-# t201 终态通知附有界原始 stdout/stderr — current
+# t206 进程树协作取消（POSIX killpg）— current
+
+2026-11-21，Asia/Shanghai。基线仍是已推送的 `f95ba94`（`feat/bun-task-core`）。本增量
+未 commit、未 push、未改 git config，不做 live 真实后端。只实现建议项 1：进程树协作
+取消；未展开研究清单的其余 4 项。实现就近对照 Grok Build 官方树
+`/workspace/grok-build` commit `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`（1.0.45）：
+`ProcessGroup` / `ProcessGroupId`（Unix `killpg`、Windows Job Object）、
+`graceful_kill_and_wait`（SIGTERM、1s grace、再 SIGKILL）、`ProcessScope::kill_all`
+（reap 后丢弃组身份，避免 PGID 复用）。
+
+## 行为与边界
+
+- POSIX：`spawnArgv` 用 `detached:true` 开新 session/process group；cancel 向已登记
+  的组发 SIGTERM，1 秒后若组仍在则 SIGKILL。grace 与既有契约及 Grok Build
+  `SIGTERM_GRACE` 相同，不用 OpenCode 的 5s。根进程先退出不会清掉 force 定时器，
+  仍会强杀同组残留；根退出后轮询组是否消失，协作树可在 grace 内结束并取消 SIGKILL。
+- 登记对齐 `ProcessGroupId::new`：拒绝 0、1、调用方自己的 pgid、非整数与大于
+  `i32::MAX` 的值。Linux 还要求 `/proc/<pid>` 显示该 pid 就是组长。组探测仅把
+  ESRCH 视为组已消失并丢弃该 pgid（不再对复用号发信号）；EPERM 不是消失，仍保留
+  登记并在 grace 后尝试 SIGKILL。
+- 外层组信号不是整树通杀：子进程或 vendor CLI 内部 `setsid` / `setpgid` 建的新组
+  不在合同内，不追杀。不扫描 /proc 去杀无关进程，不构造 shell 杀令，不向 daemon
+  或其他任务的组发信号。wait 超时仍不杀（exit 9）；`drain` 仍等待当前 worker、
+  不取消正在运行的任务；仍只在观察到 close 后把 cancelling 标为 cancelled。
+- 调用方 pgid 与 `/proc` 组长检查仅 Linux。其他 POSIX 仍拒绝 0/1/越界，但读不到
+  自身 pgid 时不做自身组比对。
+- Windows 进程树 / Job Object **未实现、未在本机原生验证**，cancel 仍只
+  `child.kill` 直接子进程。未引入新依赖，也未用手写、无法验证的 bun:ffi Win32
+  结构体布局。Grok Build 的 Job Object 使用 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`：
+  关闭 job handle——包括 daemon 进程崩溃后内核收回残留 handle——会结束仍在该 job
+  中的全部进程。这是内核强制杀树，不是保活；也不同于本包 Unix 契约（丢弃组 handle
+  是空操作；`recover` 把残留 starting/running/cancelling 标为 unknown，并不收割
+  其进程组）。Grok Build 在成功路径还有 `preserve_descendants()` 清掉该标志，
+  避免 Drop 误杀。不得把这两套崩溃语义写成相同。
+
+## TDD
+
+先写失败的真实 Linux 进程树测试，再改 `spawnArgv`。覆盖：协作 SIGTERM 在 1s 内结束；
+根先退出后仍强杀同组孙进程；忽略 SIGTERM 则 1s 后 SIGKILL；重复 cancel 不重置
+grace；`setsid` 出走的孙进程不追（测试 finally 只收割自己记录的 pid/pgid）；并发
+任务隔离；自然退出后的 cancel 不抛；engine wait 超时不杀、后台 `drain` 不取消正在
+运行的任务、`cancel()` 在观察到 close 后才是 cancelled。另有登记拒绝用例。测试只
+杀自己创建并记录的 pid/pgid，拒绝 pgid≤1 或测试进程自己的组。非 Linux 跳过树测
+（不冒称 Windows 原生通过）。
+
+日志：`evidence/process-tree-cancel/`。中途全量曾因协作树在负载下等到 force（根
+close 未轮询组退出，`elapsed=1004`）失败一次，补轮询后重跑通过；该失败日志保留为
+`05-source-suite.log`，最终以 `13`/`14`/`15`/`16` 为准。
+
+## 最终验证（本增量全量重跑）
+
+未 commit。`git diff --check` 通过。无 `.compiled-test-src`，无残留
+`process-tree-child`，无残留 `/tmp/aw-tree-*`。
+
+| 套件 | pass / fail | expect calls | 实测时间 |
+|---|---|---|---|
+| typecheck（`tsc6 --noEmit`） | 通过 | — | 2.80s |
+| 源码 `bun run test`（8 个文件，含新增 process-tree） | 226 / 0 | 1751 | 106.08s |
+| 其中 process-tree.test.ts（Linux） | 8 / 0 | 42 | 约 5.81s（单文件） |
+| production 编译 | 通过 | 415 modules | bundle 50ms，compile 521ms |
+| test-host 编译 | 通过 | 365 modules | bundle 46ms，compile 373ms |
+| compiled.test.ts | 74 / 0 | 586 | 38.89s |
+
+## 未做
+
+Windows Job Object / `.cmd` 树取消仍未实现。macOS 未跑原生树测。不承诺杀掉 vendor
+内部新建组或 `CREATE_BREAKAWAY_FROM_JOB` 出走的进程。未 commit/push。未实现研究
+建议 2–5。
+
+# t201 终态通知附有界原始 stdout/stderr — historical
 
 2026-11-21，Asia/Shanghai。基线仍 `e1d4aad`；在未提交的 Markdown 通知改动上继续，
 未 commit/push/git config，不做 live 真实后端。
